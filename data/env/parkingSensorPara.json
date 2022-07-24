@@ -1,0 +1,89 @@
+{
+    "control_dt": 1.0, 
+    "sensors": [
+        {
+            "shape": [
+                "rectangle", 
+                [
+                    20, 
+                    20
+                ]
+            ], 
+            "dm": 40, 
+            "r0": 2, 
+            "v": 5.0, 
+            "color": "r", 
+            "position": [
+                25, 
+                10, 
+                0
+            ], 
+            "r": 0.1, 
+            "sigma_a": 1.0, 
+            "quality": 0.3, 
+            "dc": 200, 
+            "d0": 5,
+            "ConfirmationThreshold": [2, 3],
+            "DeletionThreshold": [5, 5]
+        }, 
+        {
+            "shape": [
+                "rectangle", 
+                [
+                    25, 
+                    25
+                ]
+            ], 
+            "dm": 40, 
+            "r0": 2, 
+            "v": 5.0, 
+            "color": "orchid", 
+            "position": [
+                20, 
+                31, 
+                0
+            ], 
+            "r": 0.15, 
+            "sigma_a": 1.0, 
+            "quality": 0.3, 
+            "dc": 200, 
+            "d0": 10,
+            "ConfirmationThreshold": [2, 3],
+            "DeletionThreshold": [5, 5]
+        },
+        {
+            "shape": [
+                "rectangle", 
+                [
+                    22, 
+                    22
+                ]
+            ], 
+            "dm": 40, 
+            "r0": 2, 
+            "v": 5.0, 
+            "color": "b", 
+            "position": [
+                10, 
+                50, 
+                0
+            ], 
+            "r": 0.12, 
+            "sigma_a": 1.0, 
+            "quality": 0.24, 
+            "dc": 200, 
+            "d0": 5,
+            "ConfirmationThreshold": [2, 3],
+            "DeletionThreshold": [5, 5]
+        }
+    ], 
+    "dt": 0.2, 
+    "run_num": 200,
+    "seq": {
+        "0": [1,2,3],
+        "1": [2,1,3],
+        "2": [3,1,2],
+        "3": [3,2,1]
+    },
+    "env": "parksim"
+}
