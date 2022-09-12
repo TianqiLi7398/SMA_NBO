@@ -1,3 +1,9 @@
+SMA-NBO: A Sequential Multi-Agent Target Tracking Method
+
+Please check the official implementation of the Paper:
+T. Li, L. Krakow and S. Gopalswamy, "[SMA-NBO: A Sequential Multi-Agent Planning with Nominal Belief-State Optimization in Target Tracking
+](https://arxiv.org/abs/2203.01507)" (To be Appear) in Proceedings of IEEE IROS 2022
+
 # Multiagent-Target-Planning
 
 To run this package, please use python3 version
