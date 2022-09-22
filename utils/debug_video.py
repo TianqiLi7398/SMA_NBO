@@ -1,11 +1,10 @@
 import numpy as np
-import os, sys
+import os
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from utils.effects import effects
-from matplotlib.patches import Ellipse, Rectangle, FancyArrowPatch, Circle
+from matplotlib.patches import Circle
 from matplotlib.text import Text
 import copy
 

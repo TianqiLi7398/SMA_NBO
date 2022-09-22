@@ -1,14 +1,12 @@
 import numpy as np 
 import json
-import os, sys
+import os
 from utils.metrics import ospa
 from utils.effects import effects
 import matplotlib.pyplot as plt
-from matplotlib.offsetbox import AnnotationBbox, OffsetImage
-from utils.MonteCarloRollout import MCRollout
 import copy
-from utils.msg import Agent_basic, Single_track, Info_sense
-from matplotlib.patches import Ellipse, Rectangle, FancyArrowPatch
+from utils.msg import Agent_basic
+from matplotlib.patches import Rectangle
 
 def main(date2run, MCSnum, IsBasePolicy, agentid, isbatch=True, opt_step = -1,
         iteration=0, isCentral=False, c=10.0, p=2, isKFOnly=True, horizon = 5, ftol=1e-3, gtol=7, endtime = -1,

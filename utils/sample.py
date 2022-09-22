@@ -1,34 +1,35 @@
 import numpy as np 
 from scipy.stats import levy
 from scipy.optimize import fsolve
-from utils.shapes import circle
 
 class sampling:
     @staticmethod
-    def levy_walk( n, minstep, maxstep ):
+    def levy_walk(n: int, minstep: float, maxstep: float) -> np.array:
+        # sample a levy distributed trajectory
 
-        # levy distributed step length
         min_array, max_array = np.ones(n)*minstep, np.ones(n)*maxstep
         r = levy.rvs( size=n )/10
         r = np.maximum(np.minimum(max_array,r), min_array)
         return r
 
     @staticmethod
-    def f_list(x, coeff):
+    def f_list(x: list, coeff: list) -> list:
+        # generate a list of polynomial trajectories based on input x
         y_ = []
         for xj in x:
             y_.append(sampling.poly(xj, coeff))
         return y_
 
     @staticmethod
-    def poly(x, coeff):
+    def poly(x: float, coeff: list) -> float:
+        # polynomial function
         yj = 0
         for i in range(len(coeff)):
             yj += coeff[i]*x**i
         return yj
 
     @staticmethod
-    def f2solve(z, coeff, r, z0):
+    def f2solve(z: list, coeff: list, r: float, z0: list) -> list:
         x, y = z
         x0, y0 = z0
         f1 = y - sampling.poly(x, coeff)
@@ -48,11 +49,18 @@ class sampling:
         return x_, y_, r_
     
     @staticmethod
-    def euclidan_dist(p1, p2):
+    def euclidan_dist(p1: list, p2: list) -> float:
         return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
     
     @staticmethod
-    def circles_no_overlap(a, b, x0, y0, num, r):
+    def circles_no_overlap(
+            a: float, 
+            b: float, 
+            x0: float, 
+            y0: float, 
+            num: int, 
+            r: float
+        ) -> tuple:
         
         x_list, y_list = [], []
         

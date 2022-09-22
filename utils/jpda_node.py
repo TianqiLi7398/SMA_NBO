@@ -1,24 +1,26 @@
-# version adapted for the demo
+# jpda algorithm
 
 import numpy as np
 from numpy.linalg import inv
 import copy
 from scipy.stats import multivariate_normal
 from scipy.stats.distributions import chi2
-from numpy import linalg as LA
-from utils.util import EKFcontrol, dynamic_kf, measurement, track
+from utils.util import LinearKF, dynamic_kf, measurement, track
+from typing import Any, List, Tuple
 
-def normalize(a_list):
+def normalize(a_list: list) -> list:
+    # normalize a vector
     the_sum = sum(a_list)
     a_list = a_list / the_sum
     return a_list
 
-def checkIfDuplicates(listOfElems):
-    ''' Check if given list contains any duplicates, for example A B C is good, but A B B is not '''    
+def checkIfDuplicates(listOfElems: list) -> bool:
+    ''' Check if given list contains any duplicates, for
+    example A B C is good, but A B B is not '''    
     setOfElems = set()
     # special case, all are false alarm, so the sum should be len * -1
     sum_ = sum(listOfElems)
-    if sum_ ==  - len(listOfElems):
+    if sum_ == -len(listOfElems):
         return False
     for elem in listOfElems:
         if elem in setOfElems:
@@ -28,7 +30,11 @@ def checkIfDuplicates(listOfElems):
             setOfElems.add(elem)         
     return False
 
-def common_fact(beta, P_D, N_T, N_o):
+def common_fact(beta: float, 
+        P_D: float,
+        N_T: float,
+        N_o: float
+    ) -> float:
     if N_o > N_T:
         return beta ** (N_o - N_T)
     else:
@@ -37,11 +43,18 @@ def common_fact(beta, P_D, N_T, N_o):
 
 class jpda_single:
 
-    def __init__(self, dt, sensor_para, P_G = 0.98, P_D = 0.9,
-        ConfirmationThreshold = [6, 8],
-        DeletionThreshold = [7, 10],
-        isSimulation = True,
-        isObsdyn = False, t0 = 0, IsStatic = False):
+    def __init__(self, 
+            dt: float, 
+            sensor_para: dict, 
+            P_G: float = 0.98, 
+            P_D: float = 0.9,
+            ConfirmationThreshold: List[float] = [6, 8],
+            DeletionThreshold: List = [7, 10],
+            isSimulation: bool = True,
+            isObsdyn: bool = False,
+            t0: float = 0.0,
+            IsStatic: bool = False
+        ):
         self.gating_size = chi2.ppf(P_G, df = 2)
         self.P_D = P_D  # probability of detection
         # Define gating size, for elliposidal gating, we need parameter P_G
@@ -52,6 +65,7 @@ class jpda_single:
             self.Q = np.zeros((4,4))
             self.P = np.diag([.5**2] * 4)
         else:
+            # NCV dynamic model
             self.F = np.matrix([[1, 0, self.dt, 0],
                                 [0, 1, 0, self.dt],
                                 [0, 0, 1, 0],
@@ -86,14 +100,14 @@ class jpda_single:
         self.sensor_qual = sensor_para["quality"]
         self.t = t0
 
-    def add_track(self, z, t):
+    def add_track(self, z: List[float], t: float):
         
         x0 = np.matrix(z).T
         
         if self.isObsdyn:
             kf = dynamic_kf(self.F, self.H, x0, self.P, self.Q, copy.deepcopy(self.R), self.sensor_para["r0"], quality=self.sensor_qual)
         else:
-            kf = EKFcontrol(self.F, self.H, x0, self.P, self.Q, self.R)
+            kf = LinearKF(self.F, self.H, x0, self.P, self.Q, self.R)
         
         id_ = len(self.track_list)
         new_track = track(t, id_, kf, self.DeletionThreshold, self.ConfirmationThreshold)
@@ -102,7 +116,7 @@ class jpda_single:
         self.track_list.append(new_track)
         self.track_list_next_index.append(id_)
 
-    def isInFoV(self, z):
+    def isInFoV(self, z: List[float]) -> bool:
         # give z = [x, y], check if it's inside FoV
         if self.sensor_para["shape"][0] == "circle":
             r = self.sensor_para["shape"][1]
@@ -131,8 +145,14 @@ class jpda_single:
         else:
             return False
 
-    def obs_fov(self, z_k, size_k, xs):
-
+    def obs_fov(self, 
+            z_k: List[List[float]],
+            size_k: List[List[float]], 
+            xs: List[float]
+        ) -> Tuple[List[List[float]], List[List[float]]]:
+        '''
+        filter all observations outside of FoV
+        '''
         if self.isObsdyn:
             self.sensor_para["position"] = xs
         size_inside = []
@@ -176,7 +196,7 @@ class jpda_single:
             size_inside = size_k
         return inside_obs, size_inside
 
-    def elliposidualGating(self, z_til, S):
+    def elliposidualGating(self, z_til: np.array, S: np.ndarray) -> int:
     
         value = np.dot(np.dot(z_til.T, inv(S)), z_til)[0,0]
     
@@ -185,7 +205,7 @@ class jpda_single:
         else:
             return 0
     
-    def Gaussian_error(self, x0, Q0, xi, Qi):
+    def Gaussian_error(self, x0: np.ndarray, Q0, xi: np.ndarray, Qi) -> float:
         # metrics for similarity of 2 tracks
         # here all inputs are in np.matrix format
         error = x0.flatten() - xi.flatten()
@@ -194,7 +214,11 @@ class jpda_single:
         # error = np.dot(np.dot(x_error.T, np.linalg.inv(Q0 + Qi)), x_error) + np.log(np.linalg.det(Q0 + Qi))
         # return error[0,0]
 
-    def checkSimilarity(self, id1, id2):
+    def checkSimilarity(self, id1: int, id2: int) -> Tuple[bool, int]:
+        '''
+        compare trajectories of id1 and id2, check if they are close enough 
+        via d0, delete the one with shorter history if found any
+        '''
         if id1 != id2:
             x0 = self.track_list[id1].kf.x_k_k
             P0 = self.track_list[id1].kf.P_k_k
@@ -203,7 +227,8 @@ class jpda_single:
             if self.Gaussian_error(x0, P0, xi, Pi) < self.sensor_para["d0"]:
                 # keep the one with shorter history
                 print("deleted because of the similarity")
-                if self.track_list[id1].record["time_interval"][0] > self.track_list[id2].record["time_interval"][0]:
+                if self.track_list[id1].record["time_interval"][0] >\
+                        self.track_list[id2].record["time_interval"][0]:
                     self.track_list[id1].deletion(self.t)
                     # print("conflict raise and delete ", x0[0,0], x0[1, 0])
                     return True, id1
@@ -213,13 +238,18 @@ class jpda_single:
                     return True, id2
         return False, -1
 
-    def cal_beta(self, N):
-        # TODO Don't define the beta yet
-        #     normalized volume for ellipsodial gate is 
+    def cal_beta(self, N: float) -> float:
+        #  normalized volume for ellipsodial gate is 
         V = np.pi * self.gating_size  # equ. 6.28 b
         return N / V
 
-    def track_update(self, t, dt, z_k, size_k, xs):
+    def track_update(self, 
+            t: float, 
+            dt: float, 
+            z_k: List[float], 
+            size_k: List[float], 
+            xs: List[float]
+        ) -> List[track]:
         self.t = t
         if self.isObsdyn:
             ellips_inputs_k = self.track_update_dyn(t, dt, z_k, size_k, xs)
@@ -228,18 +258,24 @@ class jpda_single:
         
         return ellips_inputs_k #, bb_output_k
 
-    def track_update_sta(self, t, dt, z_k, size_k):
-        # here the format of z_k is 
-        # t: time of receiving the observations
-        # dt: time between this time and last time of receiving observations
-        # z_k: a list of position data, expressed as [[x1, y1], [x2, y2], ...]
+    def track_update_sta(self, 
+            t: float, 
+            dt: float, 
+            z_k: List[List[float]], 
+            size_k: List[List[float]]
+        ) -> List[track]:
+        '''
+        tracking the target with LinearKF object
+        t: time of receiving the observations
+        dt: time between this time and last time of receiving observations
+        z_k: a list of position data, expressed as [[x1, y1], [x2, y2], ...]
+        size_k: list of bounding box size, currently not used
 
-        # FoV analysis, to classifiy obs data into 2 parts, inside FoV or outside
+        FoV analysis, to classifiy obs data into 2 parts, inside FoV or outside
+        '''
         
         if self.isSimulation:
             z_k, size_k = self.obs_fov(z_k, size_k, [0,0])
-        
-
         
         # adaptive motion model here
         self.F = np.matrix([[1, 0, dt, 0],
@@ -253,7 +289,6 @@ class jpda_single:
         # bb_output_k = []
         
         # 1. extract all obs inside elliposidual gates of initialized and confirmed tracks
-
 
         obs_matrix = np.zeros((len(self.track_list_next_index), len(z_k)))
 
@@ -282,8 +317,6 @@ class jpda_single:
         index = np.where(obs_sum > 0)[0]
         obs_outside_index = np.where(obs_sum == 0)[0]
 
-
-       
 
         # 2. deal with observations inside all gates
         # i. initialize each observation, find out how many gates each observation is in
@@ -314,7 +347,6 @@ class jpda_single:
                 obs_class.append([])
 
         # ii. for each gate/track, analysis if there exists observations joint different tracks, find out the relation between different tracks
-
 
         track_class = []
         for i in range(len(self.track_list_next_index)):
@@ -448,8 +480,7 @@ class jpda_single:
                         product = 1
                     else:
                         product = obs_num_tracks_[(col_num + 1):].prod()
-                        obs_id = int(row_num // product)
-                    
+                        obs_id = int(row_num // product)             
                     
                     value = self.track_list[table_key[col_num]].measurement[obs_id]
                     
@@ -540,8 +571,7 @@ class jpda_single:
                 track_class[i].update(t, kf, False)
                 track_class[i].deleted = True
                 continue
-            
-            
+                        
             track_class[i].update(t, kf, True)
             
             # save the activated ones for next recursion
@@ -570,14 +600,13 @@ class jpda_single:
                 # bb_output_k.append(bb_k[self.find_cloest(x_k_pda, x_k[1:])])
                 # track_class[i].bb_box_size = bb_output_k[-1]
 
-
         # 3. deal with observations outside all gates
             
         # now initialize all observations outside of the gate
         for i in obs_outside_index:
             z = z_k[i] + [0, 0]
             x0 = np.matrix(z).T
-            kf = EKFcontrol(self.F, self.H, x0, self.P, self.Q, self.R)
+            kf = LinearKF(self.F, self.H, x0, self.P, self.Q, self.R)
             id_ = len(self.track_list)
             new_track = track(t, id_, kf, self.DeletionThreshold, self.ConfirmationThreshold)
             new_track.kf.predict()
@@ -591,19 +620,28 @@ class jpda_single:
         return ellips_inputs_k#, bb_output_k
 
 
-    def track_update_dyn(self, t, dt, z_k, size_k, xs):
-        # here the format of z_k is 
-        # t: time of receiving the observations
-        # dt: time between this time and last time of receiving observations
-        # z_k: a list of position data, expressed as [[x1, y1], [x2, y2], ..]
-        # xs: sensor's state, [x,y,theta]
+    def track_update_dyn(self, 
+            t: float, 
+            dt: float, 
+            z_k: List[List[float]], 
+            size_k: List[List[float]],
+            xs: List[float],
+        ) -> List[track]:
+        '''
+        tracking the target with dynamic_KF object, based on range-bearing model
 
-        # FoV analysis, to classifiy obs data into 2 parts, inside FoV or outside
+        t: time of receiving the observations
+        dt: time between this time and last time of receiving observations
+        z_k: a list of position data, expressed as [[x1, y1], [x2, y2], ...]
+        size_k: list of bounding box size, currently not used
+        xs: sensor's state, [x,y,theta]
+
+        FoV analysis, to classifiy obs data into 2 parts, inside FoV or outside
+        '''
         
         if self.isSimulation:
             z_k, size_k = self.obs_fov(z_k, size_k, xs)
         
-
         
         # adaptive motion model here
         self.F = np.matrix([[1, 0, dt, 0],
@@ -686,8 +724,6 @@ class jpda_single:
             a_track.get_measurement(np.where(obs_matrix[i] != 0)[0])
             a_track.measurement.append(-1)
             track_class.append(a_track)
-
-
 
         for i in range(len(track_class)):
             
@@ -961,7 +997,13 @@ class jpda_single:
         return ellips_inputs_k
     
 
-    def find_cloest(self, x_k_pda, x_k):
+    def find_cloest(self, 
+            x_k_pda: np.ndarray, 
+            x_k: List[Any]
+        ) -> int:
+        '''
+        Find the closet observation to the trajectory
+        '''
         dist = np.linalg.norm(x_k[0] - x_k_pda)
         ind = 0
         for i in range(len(x_k) - 1):

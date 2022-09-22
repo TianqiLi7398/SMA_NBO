@@ -16,19 +16,30 @@ Properities:
 
 from utils.msg import Agent_basic, Single_track, Info_sense
 import numpy as np
-from utils.jpda_agent import jpda_single
-from utils.util import EKFcontrol, dynamic_kf, measurement, track, vertex
-from utils.occupancy import occupancy 
+from utils.jpda_node import jpda_single
+from utils.util import LinearKF, dynamic_kf, track, vertex
 from scipy.optimize import linear_sum_assignment   # Hungarian alg, minimun bipartite matching
 import copy
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
+from typing import Any, List, Tuple
 
 class dec_jpda:
-    def __init__(self, sensor_para_list, agentid, dt, L = 5, 
-            isObsdyn_ = False, NoiseResistant = True, 
-            isVirtual = False, t0 = 0, SemanticMap=None, OccupancyMap = None, 
-            sigma=False, w0 = .7, IsStatic = False):
+    def __init__(
+            self, 
+            sensor_para_list: dict, 
+            agentid: int, 
+            dt: float, 
+            L: int = 5, 
+            isObsdyn_: bool = False, 
+            NoiseResistant: bool = True, 
+            isVirtual: bool = False,
+            t0: float = 0.0, 
+            SemanticMap: Any = None, 
+            OccupancyMap: Any = None, 
+            sigma: bool = False,
+            IsStatic: bool = False
+        ):
         self.id = agentid
         self.sensor_para = sensor_para_list[agentid]
         self.sensor_para_list = sensor_para_list
@@ -54,20 +65,20 @@ class dec_jpda:
         else:
             if self.isObsdyn:
                 self.tracker = jpda_single(self.dt, self.sensor_para,
-                                    isSimulation = True, 
-                                    isObsdyn=isObsdyn_,
-                                    ConfirmationThreshold = self.sensor_para["ConfirmationThreshold"],
-                                    DeletionThreshold = self.sensor_para["DeletionThreshold"], 
-                                    t0=t0, IsStatic = IsStatic)
-                                    # ConfirmationThreshold = [4, 5],
-                                    # DeletionThreshold = [10, 12], t0=t0)
+                    isSimulation = True, 
+                    isObsdyn=isObsdyn_,
+                    ConfirmationThreshold = self.sensor_para["ConfirmationThreshold"],
+                    DeletionThreshold = self.sensor_para["DeletionThreshold"], 
+                    t0=t0, IsStatic = IsStatic)
+                    # ConfirmationThreshold = [4, 5],
+                    # DeletionThreshold = [10, 12], t0=t0)
             else:
                 self.tracker = jpda_single(self.dt, self.sensor_para,
-                                    isSimulation = True, 
-                                    isObsdyn=isObsdyn_, 
-                                    ConfirmationThreshold = self.sensor_para["ConfirmationThreshold"],
-                                    DeletionThreshold = self.sensor_para["DeletionThreshold"], 
-                                    t0=t0, IsStatic = IsStatic)
+                    isSimulation = True, 
+                    isObsdyn=isObsdyn_, 
+                    ConfirmationThreshold = self.sensor_para["ConfirmationThreshold"],
+                    DeletionThreshold = self.sensor_para["DeletionThreshold"], 
+                    t0=t0, IsStatic = IsStatic)
         self.default_bbsize = [1,1]
         # a threshold d0 for metrics
         self.d0 = self.sensor_para["d0"]
@@ -87,11 +98,10 @@ class dec_jpda:
         # elif self.useOccupancy:
             # self.Occupancy = np.matrix(self.OccupancyMap['occupancy'])
             # self.resolution = 0.1
-            
         
         self.w0 = .5
 
-    def basic_info(self, message_list):
+    def basic_info(self, message_list: List[Agent_basic]):
         self.neighbor =  {"id": [], "pos": []}
 
         for message in message_list:
@@ -112,13 +122,13 @@ class dec_jpda:
         
         return
 
-    def init_vertex(self, track):
+    def init_vertex(self, track: track):
         # when jpda returns a certain track, we need to utlize the 
         # track in track-to-track matching func, thus we need to activate
         # the track 
         track.agent_id = self.id 
 
-    def pre_msg(self, track_result):
+    def pre_msg(self, track_result) -> Info_sense:
         # prepare the new message, after 1 sensor update and JPDA
         self.local_track = { "infos": [], "id": [], "incomes": []}
         self.info_msg = Info_sense()
@@ -153,7 +163,7 @@ class dec_jpda:
 
         return copy.deepcopy(self.info_msg)
 
-    def cal_R(self, z, xs):
+    def cal_R(self, z: List[float], xs: List[float]) -> np.ndarray:
         dx = z[0] - xs[0]
         dy = z[1] - xs[1]
         if np.isclose(dx, 0):
@@ -168,36 +178,14 @@ class dec_jpda:
         
         return R
 
-    def isInFoV(self, z):
+    def isInFoV(self, z: List[float]) -> bool:
         # give z = [x, y], check if it's inside FoV
-        if self.sensor_para["shape"][0] == "circle":
-            r = self.sensor_para["shape"][1]
-            center = self.sensor_para["position"]
-            distance = np.sqrt((center[0] - z[0])**2 + (center[1] - z[1])**2)
-            if distance > r:
-                return False
-            else:
-                return True
-        elif self.sensor_para["shape"][0] == "rectangle":
-            # analysis the shape of rectangle
-            width = self.sensor_para["shape"][1][0]
-            height = self.sensor_para["shape"][1][1]
-            angle = self.sensor_para["position"][2]
-            center = self.sensor_para["position"][0:2]
-    
-            dx = z[0] - center[0]
-            dy = z[1] - center[1]
-            dx_trans = dx * np.cos(angle) + dy * np.sin(angle)
-            dy_trans = - dx * np.sin(angle) + dy * np.cos(angle)
-            
-            if 2 * abs(dx_trans) <= width and 2 * abs(dy_trans) <= height:
-                return True
-            else:
-                return False
-        else:
-            return False
+        return self.tracker.isInFoV(z)
 
-    def VirtualUpdate(self, z_k, semantic):
+    def VirtualUpdate(self, 
+            z_k: List[float], 
+            semantic: List[bool]
+        ) -> Info_sense:
         # Do KF update in the order of z_k
         if self.isObsdyn:
             for i in range(len(z_k)):
@@ -261,7 +249,12 @@ class dec_jpda:
 
         return copy.deepcopy(self.info_msg)
 
-    def sigma_obs(self, z, P, n=2):
+    def sigma_obs(
+            self, 
+            z: np.ndarray, 
+            P: np.ndarray, 
+            n: int=2
+        ) -> Tuple[list, list]:
         '''
         generate sigma points on the eigen basis direction, from 
         https://www.visiondummy.com/2014/04/geometric-interpretation-covariance-matrix/
@@ -306,7 +299,7 @@ class dec_jpda:
                 for j in range(len(z_list)):
                     z = z_list[j]
                     
-                    if self.InsideObstacle([z[0], z[1]]) or (not self.isInFoV(z)):
+                    if self.isInsideOcclusion([z[0], z[1]]) or (not self.isInFoV(z)):
                         w_out += w_list[j]
                     else:
                         w_in += w_list[j]
@@ -331,7 +324,7 @@ class dec_jpda:
                 for j in range(len(z_list)):
                     z = z_list[j]
                     pose = Point(z[0], z[1])
-                    if self.InsideObstacle(pose) or (not self.isInFoV(z)):
+                    if self.isInsideOcclusion(pose) or (not self.isInFoV(z)):
                         w_out += w_list[j]
                     else:
                         w_in += w_list[j]
@@ -375,16 +368,21 @@ class dec_jpda:
 
         return copy.deepcopy(self.info_msg)
 
-    def euclidan_dist(self, p1, p2):
+    def euclidan_dist(self, p1: List[float], p2: List[float]) -> float:
         return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
-    def sim_detection_callback(self, obs_raw, t, semantic = None):
+    def sim_detection_callback(self, 
+            obs_raw: List[float], 
+            t: List[float], 
+            semantic: Any = None
+        ) -> Info_sense:
+        
         z_k = copy.deepcopy(obs_raw)
         self.t = t
         # simulated callback after receiving sensor's info
         size_k = []
         if self.isVirtual:
-            # only KF updates without data association
+            # only KF updates without data association, happens in planning
             if self.sigma:
                 return self.VirtualUpdate_sigma(z_k)
             else:
@@ -415,43 +413,36 @@ class dec_jpda:
 
         return self.pre_msg(track_result), z_k, size_k
 
-    def InsideObstacle(self, pt):
-        # IsInside = False
-        # if not self.useSemantic:
-        #     return IsInside
-        # for obstacle in self.Obstacles:
-        #     IsInside += obstacle.contains(pt)
-        # return IsInside
+    def isInsideOcclusion(self, pt: List[float]) -> bool:
+        '''
+        check if the pt is inside the Occlusion
+        '''
         IsInside = False
         if self.useSemantic:
             pt = Point(pt[0], pt[1])
             for obstacle in self.Obstacles:
                 if obstacle.contains(pt): return True
         elif self.useOccupancy:
-
-            # row, col = occupancy.xy2rowcol(pt[0], pt[1], self.OccupancyMap['canvas'], self.resolution)
-            # if self.Occupancy[row, col] > 0:
-            #     IsInside = True
             for i in range(len(self.OccupancyMap['centers'][0])):
                 x, y = self.OccupancyMap['centers'][0][i], self.OccupancyMap['centers'][1][i]
                 if self.euclidan_dist([x, y], pt) < self.OccupancyMap['r']: return True
                 
         return IsInside
 
-    def SimpleSemantic(self, z_k):
+    def SimpleSemantic(self, z_k: List[List[float]]) -> List[List[float]]:
         # filter targets inside the area of obstacles (like tree shadows)
         output = []
         for z in z_k:
-            if not self.InsideObstacle([z[0], z[1]]):
+            if not self.isInsideOcclusion([z[0], z[1]]):
                 output.append(z)
         return output
 
-    def grab_info_list(self, msg_list):
+    def grab_info_list(self, msg_list: List[Info_sense]):
         for msg in msg_list:
 
             self.grab_info(msg)
 
-    def grab_info(self, msg):
+    def grab_info(self, msg: Info_sense):
         # msg type: Info_sense
         # in callback function when receive info from other nodes,
         # append the info
@@ -470,20 +461,36 @@ class dec_jpda:
         self.comm_neighbor.append(new_msg.id)
         return
         
-    def Gaussian_error(self, x0, Q0, xi, Qi):
-        # here all inputs are in np.matrix format
-        error = x0.flatten() - xi.flatten()
-        return np.sqrt(np.dot(error, error.T)[0,0])
+    def Gaussian_error(
+            self, 
+            x0: np.ndarray, 
+            Q0: np.ndarray, 
+            xi: np.ndarray, 
+            Qi: np.ndarray
+        ) -> float:
+        # calculate 2 Gaussian distribution's divergence
         # x_error = x0 - xi
         # error = np.dot(np.dot(x_error.T, np.linalg.inv(Q0 + Qi)), x_error) + np.log(np.linalg.det(Q0 + Qi))
         # return error[0,0]
+
+        # easy way, just calculate their mean difference
+        error = x0.flatten() - xi.flatten()
+        return np.sqrt(np.dot(error, error.T)[0,0])
     
-    def assign_track(self, info, track_id, local, agent_id=-1):
-        # assign one track to another track, here for inputs
-        # info: Single_track(), is one track 
-        # track_id: the track_id for the obj's tracking id 
-        # local: bool value, check if this is obj-sub or sub-sub 
-        # agent_id: if this is obj-sub, this is sub's agent id
+    def assign_track(
+            self, 
+            info: Single_track, 
+            track_id: int, 
+            local: bool,
+            agent_id: int =-1
+        ):
+        ''' assign one track to another track, 
+        INPUTS
+        info: Single_track(), is one track 
+        track_id: the track_id for the obj's tracking id 
+        local: bool value, check if this is obj-sub or sub-sub 
+        agent_id: if this is obj-sub, this is sub's agent id
+        '''
         # if local:
         index = self.local_track["id"].index(track_id)
         self.local_track["infos"][index].append(info)
@@ -501,7 +508,11 @@ class dec_jpda:
         
         return
     
-    def set_index(self, a_list, element):
+    def set_index(
+            self, 
+            a_list: list, 
+            element: Any
+        ) -> Tuple[int, bool]:
         # pretend the list as a set, return index in a_list given element
         try:
             index = a_list.index(element)
@@ -512,9 +523,11 @@ class dec_jpda:
             changed = True
         return index, changed
 
-    def matching_history(self, sub_msg):
-        
-        # only for host-customer matching
+    def matching_history(self, sub_msg: Info_sense) -> List[int]:
+        '''
+        ego-other agents info matching
+        sub_msg: msg received from another agent
+        '''
 
         X = {"track_id": [], "track": []}
         Y = {"track_id": [], "vertex": [], "index": []}
@@ -595,7 +608,7 @@ class dec_jpda:
     
                     
         ############## change ["index"] and neighbor all below
-        # 0.5.  for all 1-to-1 tracks, just assign them
+        # 1.  for all 1-to-1 tracks, just assign them
         # temporal variable to calculate the time of del in list
         m = 0    
 
@@ -636,7 +649,7 @@ class dec_jpda:
         if len(X["track_id"]) < 1 or len(Y["track_id"]) < 1:
             return Y["index"]
         
-        # pick the minimum to assign, then end, no need to go through Hungarian 
+        # 3. pick the minimum to assign, then end, no need to go through Hungarian 
         if len(X["track_id"]) < 2:
 
             error = self.d0
@@ -705,7 +718,7 @@ class dec_jpda:
                         pass
 
             # after preparing the bipartite graph matrix, implement Hungarian alg
-            row_ind, col_ind = linear_sum_assignment(edge_matrix)
+            _, col_ind = linear_sum_assignment(edge_matrix)
             # make assignments
             indexes_to_delete = []
             for i in range(len(X["track_id"])):
@@ -726,7 +739,7 @@ class dec_jpda:
             self.tracker.track_list[track_id].neighbor = []
         return Y["index"]
 
-    def matching(self, sub_msg):
+    def matching(self, sub_msg: Info_sense):
         
 
         # only for host-customer matching
@@ -915,7 +928,7 @@ class dec_jpda:
                         pass
 
             # after preparing the bipartite graph matrix, implement Hungarian alg
-            row_ind, col_ind = linear_sum_assignment(edge_matrix)
+            _, col_ind = linear_sum_assignment(edge_matrix)
             # make assignments
             indexes_to_delete = []
             for i in range(len(X["track_id"])):
@@ -943,7 +956,10 @@ class dec_jpda:
             self.track_to_track_sta()
        
     def track_to_track_sta(self):
-        # One to one message matching, obj to sub
+        '''
+        One to one message matching, obj to sub
+        match tracks with dynamic R matrices (sensor model)
+        '''
         for neighbor in self.infos_received:
         
             left_tracks_index = self.matching_history(neighbor)
@@ -954,7 +970,7 @@ class dec_jpda:
                 info = neighbor.tracks[i]
                 x0 = np.matrix(info.x).reshape(4,1)
                 P0 = np.matrix(info.P).reshape(4,4)
-                kf = EKFcontrol(self.tracker.F, self.tracker.H, x0, P0, self.tracker.Q, self.tracker.R)
+                kf = LinearKF(self.tracker.F, self.tracker.H, x0, P0, self.tracker.Q, self.tracker.R)
                 id_ = len(self.tracker.track_list)
                 new_track = track(self.t, id_, kf, self.tracker.DeletionThreshold, self.tracker.ConfirmationThreshold, isForeign=True)
                 new_track.kf.predict()
@@ -974,20 +990,13 @@ class dec_jpda:
                 # update to local track
                 self.local_track["id"].append(id_)
                 self.local_track["infos"].append([info])
-                
-                # self.local_track["incomes"].append(1)    TODO
-
-            # if self.id == 2:
-            #     print('!!!!!!!!!!!!!!!!!!!!!!!!! after one track-2-track update')
-            #     print(self.local_track["id"])
-            #     id_list = []
-            #     for i in range(len(self.info_msg.tracks)):
-            #         id_list.append(self.info_msg.tracks[i].track_id)
-            #     print(id_list)
+        
+        return
 
     def track_to_track_dyn(self):
-        # print('matching starts for agent, ', self.id)
-        # One to one message matching, obj to sub
+        '''
+        match tracks with dynamic R matrices (sensor model)
+        '''
         for neighbor in self.infos_received:
             left_tracks_index = self.matching_history(neighbor)
             # add the rest info to local track set in self.tracker, thus it is convinent 
@@ -1016,28 +1025,21 @@ class dec_jpda:
                 # update to local track
                 self.local_track["id"].append(id_)
                 self.local_track["infos"].append([info])
-                # self.local_track["incomes"].append(1)    TODO
-
-            # if self.id == 2:
-            #     print('!!!!!!!!!!!!!!!!!!!!!!!!! after one track-2-track update')
-            #     print(self.local_track["id"])
-            #     id_list = []
-            #     for i in range(len(self.info_msg.tracks)):
-            #         id_list.append(self.info_msg.tracks[i].track_id)
-            #     print(id_list)
+                
+        return
 
     def consensus(self):
         if self.isVirtual:
-            # rollout consensus, just match the KF
+            # consensus in horizon-based optimization process, just match the KF
             return self.consensusVirtual()
 
         if self.NoiseResistant:
-            # an logic analysis of the system, 
+            # a logic analysis of the system, 
             # if there are false alarms in detection,
             # we want to avergae all infos, 
-            # if not, we cant to find the infos with detections to average
             return self.consensusNoiseResistant()
         else:
+            # if not, we cant to find the infos with detections to average
             return self.consensusTrackConsistent()
 
     def consensusNoiseResistant(self):
@@ -1104,10 +1106,6 @@ class dec_jpda:
                 self.tracker.track_list[id_].kf.x_k_k = x_k_k
                 self.tracker.track_list[id_].kf.P_k_k = P_k_k
                 self.tracker.track_list[id_].kf.predict()
-                # don't let it deleted
-                # TODO
-                # if self.local_track["incomes"][i]:
-                #     self.tracker.track_list[id_].history[-1] = 1
                 if self.local_track["infos"][i][0].isObs:
                     self.tracker.track_list[id_].history[-1] = 1
                 else:
@@ -1124,8 +1122,7 @@ class dec_jpda:
         # clear the pool for information
         self.comm_neighbor = []
         self.infos_received = []
-        # self.neighbor_track = {"infos": [], "id": []}
-
+        
         # the info to show is all info of this agent
 
 
@@ -1140,13 +1137,9 @@ class dec_jpda:
         # do the consensus, and
         # adapt the local msg based on updated infos 
         for i in range(len(self.local_track["infos"])):
-            # if self.id==0:
-            #     print("consensus of track", self.local_track["infos"][i][0].x)
             if len(self.local_track["infos"][i]) == 1:
                 newtrack = self.local_track["infos"][i][0]
-                # if self.t > 15 and not newtrack.isObs:
-               
-                #     raise RuntimeError(",.")
+                
             else:
                 # implement the average weight
                 denominator = 0     # represent the number of valid tracks
@@ -1178,7 +1171,6 @@ class dec_jpda:
                     # print("it appears, ", isObsList)
                     index = isObsList.index(1)
                     newtrack = self.local_track["infos"][i][index]
-                    # print(newtrack.P)
                 else:
                     # more than one, so just do average 
                     Sigma_sum /= denominator
@@ -1194,7 +1186,7 @@ class dec_jpda:
                 
                 newtrack.track_id = self.local_track["id"][i]  
                 # isObs info out shows if you have local observation
-                # newtrack.isObs = self.local_track["infos"][i][0].isObs
+                
                 newtrack.isObs = int(isObs)
             
             # add all messages
@@ -1209,11 +1201,6 @@ class dec_jpda:
         self.l += 1
         if self.l > self.L:
             self.l = 0
-            # if self.id == 1:
-            #     try:
-            #         print(self.t, self.tracker.track_list[2].kf.P_k_k)
-            #     except:
-            #         pass
             # later update all jpda works
             for i in range(len(self.local_track["id"])):
                 id_ = self.local_track["id"][i]
@@ -1227,17 +1214,11 @@ class dec_jpda:
                 else:
                     self.tracker.track_list[id_].history[-1] = 0
                 
-                # if self.tracker.track_list[id_].history[-1] == 0 and self.tracker.track_list[id_].isForeign:
-                #     # remove it from interested track list
-                #     self.tracker.track_list[id_].deletion(self.t)
-                #     self.tracker.track_list_next_index.remove(id_)
-                # else:
         
         
         # clear the pool for information
         self.comm_neighbor = []
         self.infos_received = []
-        # self.neighbor_track = {"infos": [], "id": []}
         # the info to show is all info of this agent
         return copy.deepcopy(self.info_msg)
    
@@ -1309,10 +1290,9 @@ class dec_jpda:
         # clear the pool for information
         self.comm_neighbor = []
         self.infos_received = []
-        # self.neighbor_track = {"infos": [], "id": []}
         return copy.deepcopy(self.info_msg)
     
-    def report_tracks(self):
+    def report_tracks(self) -> Info_sense:
         info_msg_all = Info_sense()
         info_msg_all.id = self.id
 

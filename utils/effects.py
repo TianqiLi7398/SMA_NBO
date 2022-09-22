@@ -1,5 +1,4 @@
 from matplotlib.patches import Ellipse, Rectangle, FancyArrowPatch
-from scipy.stats.distributions import chi2
 import numpy as np
 
 class effects:

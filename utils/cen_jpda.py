@@ -13,14 +13,18 @@ Properities:
 '''
 
 from utils.jpda_seq import jpda_seq
-from utils.msg import Agent_basic, Single_track, Info_sense
 import numpy as np
-from utils.util import EKFcontrol, measurement, track, vertex
 from scipy.optimize import linear_sum_assignment   # Hungarian alg, minimun bipartite matching
 import copy
 
-class cen_agent:
-    def __init__(self, sensor_para_list, dt, v = 5, P0 = 2, isObsdyn = False, isRotate = False, isSimulation = True):
+class cen_jpda:
+    def __init__(self, 
+            sensor_para_list: dict, 
+            dt: float,
+            isObsdyn: bool = False,
+            isRotate: bool = False, 
+            isSimulation: bool = True
+        ):
         
         self.sensor_para_list = sensor_para_list
         self.sensor_num = len(sensor_para_list)

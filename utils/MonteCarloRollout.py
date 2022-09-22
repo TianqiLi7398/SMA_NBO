@@ -9,39 +9,27 @@ on the description in
 '''
 
 
-from utils.msg import Agent_basic, Single_track, Info_sense
 import copy
 import numpy as np
-from utils.dec_agent import dec_agent
+from utils.dec_agent_jpda import dec_agent_jpda
 import utils.util as util
-from scipy.optimize import differential_evolution, minimize
-import utils.cen_agent as cenAgent
-import utils.jpda_seq as SeqJPDA
-from joblib import Parallel, delayed
 import psutil
-import time
-from shapely.geometry import Point
 from mystic.solvers import diffev2
 from pathos.pools import ProcessPool
-from mystic.monitors import Monitor, VerboseMonitor, CustomMonitor
-from mystic.monitors import VerboseLoggingMonitor
 from mystic.strategy import Rand1Bin
 import pyswarms as ps
-from pyswarms.utils.plotters import (plot_cost_history, plot_contour, plot_surface)
-from pyswarms.utils.search.random_search import RandomSearch
-from pyswarms.utils.search.grid_search import GridSearch
 # from filterpy.kalman import JulierSigmaPoints
 
 
-class MCRollout(dec_agent):
+class MCRollout(dec_agent_jpda):
     def __init__(self, horizon, sensor_para_list, agentid, dt, cdt, opt_step = 1,
-            L0 = 5, v = 5, isObsdyn__=True, isRotate = False, gamma = 1.0, ftol = 5e-3, 
+            L0 = 5, isObsdyn=True, isRotate = False, gamma = 1.0, ftol = 5e-3, 
             gtol = 7, cenVirtualWorld = False, isParallel = True, MCSnum = 50,
             SemanticMap=None, OccupancyMap = None, sigma = False, distriRollout = True, nominal = False, 
             factor = 5, penalty = 0, lite = False, central_kf = False, optmethod='de',
             wtp=False, info_gain = False, IsStatic = False,):
         # TODO v = 5 delete
-        dec_agent.__init__(self, sensor_para_list, agentid, dt, cdt, L0 = L0, v = v, isObsdyn__=isObsdyn__, 
+        dec_agent_jpda.__init__(self, sensor_para_list, agentid, dt, cdt, L0 = L0, isObsdyn=isObsdyn, 
             isRotate = isRotate, NoiseResistant =False, SemanticMap=SemanticMap, OccupancyMap=OccupancyMap, sigma = sigma)
         
         self.sensor_num = len(sensor_para_list)
@@ -76,7 +64,7 @@ class MCRollout(dec_agent):
         self.parallel = isParallel
         self.distriRollout = distriRollout
         self.policy_stack = []
-        for i in range(self.sensor_num):
+        for _ in range(self.sensor_num):
             self.policy_stack.append([])
         self.v_bar_opt = sensor_para_list[agentid]["v"] * 0.2
         self.penalty = penalty
@@ -315,7 +303,7 @@ class MCRollout(dec_agent):
         for i in range(len(self.sensor_para_list)):
             if i in self.neighbor["id"] or i==self.id:
                 
-                ego = dec_agent(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
+                ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
                         L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, isRotate = self.isRotate, 
                         isVirtual = True, SemanticMap=self.SemanticMap)
                 
@@ -332,7 +320,7 @@ class MCRollout(dec_agent):
                             quality=self.sensor_para_list[i]["quality"])
                         kf.init = False
                     else:
-                        kf = util.EKFcontrol(self.SampleF, self.tracker.H, x0, P0, self.SampleQ, 
+                        kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.SampleQ, 
                             self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
                             self.sensor_para_list[i]["r"]]))
                     ego.tracker.append(kf)
@@ -352,7 +340,7 @@ class MCRollout(dec_agent):
                 z = z_k[j]
                 # pose = Point(z[0], z[1])
                 agent_list[0].tracker[j].predict()
-                if self.InsideObstacle(z):
+                if self.isInsideOcclusion(z):
                     # get occluded, skip update
                     agent_list[0].tracker[j].x_k_k = agent_list[0].tracker[j].x_k_k_min
                     agent_list[0].tracker[j].P_k_k = agent_list[0].tracker[j].P_k_k_min
@@ -391,7 +379,7 @@ class MCRollout(dec_agent):
             for j in range(len(self.trajInTime_list[trialnum][-1])):
                 z = self.trajInTime_list[trialnum][-1][j]            
                 # pose = Point(z[0], z[1])
-                if self.InsideObstacle(z):
+                if self.isInsideOcclusion(z):
                     continue
                 isoutside = True
                 for k in range(neighbor_num):
@@ -422,12 +410,12 @@ class MCRollout(dec_agent):
         # 1. initiate all sensors
         agent_list = []
         
-        neighbor_num = len(self.neighbor["id"]) + 1
+        neighbor_num = len(self.neighbor["id"]) + 11
         
         for i in range(len(self.sensor_para_list)):
             if i in self.neighbor["id"] or i==self.id:
                 
-                ego = dec_agent(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
+                ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
                         L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, isRotate = self.isRotate, 
                         isVirtual = True, SemanticMap=self.SemanticMap)
                 
@@ -444,7 +432,7 @@ class MCRollout(dec_agent):
                             quality=self.sensor_para_list[i]["quality"])
                         
                     else:
-                        kf = util.EKFcontrol(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
+                        kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
                             self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
                             self.sensor_para_list[i]["r"]]))
                     kf.init = False
@@ -469,7 +457,7 @@ class MCRollout(dec_agent):
                 z = z_k[j]
                 
                 agent_list[0].tracker[j].predict()
-                if not self.InsideObstacle([z[0], z[1]]):
+                if not self.isInsideOcclusion([z[0], z[1]]):
                     # do sequential update, use P = [P^-1 + \sum_i H^T R^-1_i H] ^ -1
                     index = -1
                     R = np.matrix(np.zeros((2, 2)))
@@ -514,7 +502,7 @@ class MCRollout(dec_agent):
             # for j in range(len(self.trajInTime[-1])):
             #     z = self.trajInTime[-1][j]            
                 
-            #     if self.InsideObstacle([z[0], z[1]]):
+            #     if self.isInsideOcclusion([z[0], z[1]]):
             #         continue
             #     isoutside = True
             #     for k in range(neighbor_num):
@@ -540,7 +528,7 @@ class MCRollout(dec_agent):
             for j in range(len(self.trajInTime_list[trialnum][-1])):
                 z = self.trajInTime_list[trialnum][-1][j]            
                 
-                if self.InsideObstacle([z[0], z[1]]):
+                if self.isInsideOcclusion([z[0], z[1]]):
                     continue
                 isoutside = True
                 for k in range(neighbor_num):

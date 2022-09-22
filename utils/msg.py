@@ -1,5 +1,4 @@
 from collections import namedtuple
-from unicodedata import name
 
 class Single_track:
     def __init__(self):
@@ -83,6 +82,6 @@ class Planning_msg:
         for key in self.u.keys():
             self.u[key] = []
     
-    def push(self, action_vector, t, agent_id):
+    def push(self, action_vector: list, t: float, agent_id: int):
         new_intent = self.Intention(t, action_vector)
         self.u[agent_id] = new_intent

@@ -14,20 +14,35 @@ Properities:
     3. TODO some noisy tracks are confirmed after JDPA, which is supposed to be enhanced later;
 '''
 
-from utils.msg import Agent_basic, Single_track, Info_sense
 import numpy as np
-from utils.jpda_consensus import dec_jpda
+from utils.dec_jpda import dec_jpda
+from typing import Any
 
-
-class dec_agent(dec_jpda):
-
-    def __init__(self, sensor_para_list, agentid, dt, cdt, L0 = 5, v = 5, 
-        isObsdyn__=True, isRotate = False, NoiseResistant = True, IsStatic = False,
-        isVirtual = False,t0 = 0, SemanticMap=None, OccupancyMap=None, sigma = False):
+class dec_agent_jpda(dec_jpda):
+    '''
+    Agent of jpda has dynamics so that it changes it state.
+    '''
+    def __init__(
+            self, 
+            sensor_para_list: dict, 
+            agentid: int, 
+            dt: float, 
+            cdt: float, 
+            L0: int = 5, 
+            isObsdyn: bool =True,
+            isRotate: bool = False, 
+            NoiseResistant: bool = True, 
+            IsStatic: bool = False,
+            isVirtual: bool = False,
+            t0: float = 0, 
+            SemanticMap: Any =None, 
+            OccupancyMap: Any =None, 
+            sigma: bool = False
+        ):
         dec_jpda.__init__(self, sensor_para_list, agentid, dt, L = L0, 
-                    isObsdyn_=isObsdyn__, NoiseResistant =NoiseResistant, 
-                    isVirtual=isVirtual, t0 = t0, SemanticMap=SemanticMap,
-                    OccupancyMap=OccupancyMap, sigma=sigma, IsStatic = IsStatic)
+            isObsdyn_=isObsdyn, NoiseResistant =NoiseResistant, 
+            isVirtual=isVirtual, t0 = t0, SemanticMap=SemanticMap,
+            OccupancyMap=OccupancyMap, sigma=sigma, IsStatic = IsStatic)
         self.dm = sensor_para_list[agentid]["dm"]      # the diameter limit for sensor's local base policy
         self.dm = 40
         self.v = [0,0]
@@ -35,12 +50,13 @@ class dec_agent(dec_jpda):
         self.isRotate = isRotate
         self.cdt = cdt
     
-    def predictPos(self, x):
+    def predictPos(self, x: list) -> list:
+        # predict the x,y coordinate based on control time step cdt 
         return [x[0] + self.cdt * x[2], x[1] + self.cdt * x[3]]
 
     def base_policy(self):
         
-        # pick up the base policy for 
+        # a greedy base policy: agents find the worst target 
         
         worst_x = self.sensor_para["position"][0:2]
         worst_P = -1
@@ -87,6 +103,7 @@ class dec_agent(dec_jpda):
         return
     
     def updateAngle(self):
+        # update the orientation of the FoV
         if abs(self.v[0]) + abs(self.v[1]) > 0:
             if np.isclose(self.v[0], 0):
                 theta = np.sign(self.v[1]) * np.pi/2
@@ -101,7 +118,7 @@ class dec_agent(dec_jpda):
             self.sensor_para["position"][2] = theta
 
 
-    def dynamics(self, dt):
+    def dynamics(self, dt: float):
         # update the position of sensors
         
         self.sensor_para["position"][0] += self.v[0] * dt

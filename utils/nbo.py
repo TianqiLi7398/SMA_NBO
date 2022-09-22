@@ -7,40 +7,56 @@ The Nominal Belief Optimization (NBO) method for multisensor target tracking
 '''
 import copy
 import numpy as np
-from utils.msg import Agent_basic, Single_track, Info_sense, Planning_msg
-from utils.dec_agent import dec_agent
-from utils.occupancy import occupancy
+from utils.msg import Agent_basic, Planning_msg
+from utils.dec_agent_jpda import dec_agent_jpda
 import utils.util as util
-from scipy.optimize import differential_evolution, minimize
-from joblib import Parallel, delayed
 import psutil
-import time
-from shapely.geometry import Point
-from mystic.solvers import diffev2, diffev
+from mystic.solvers import diffev2
 from pathos.pools import ProcessPool
-from mystic.monitors import Monitor, VerboseMonitor, CustomMonitor, VerboseLoggingMonitor
 from mystic.strategy import Rand1Bin
 from scipy.optimize import linear_sum_assignment   # Hungarian alg, minimun bipartite matching
 import itertools
 import pyswarms as ps
-from pyswarms.utils.plotters import (plot_cost_history, plot_contour, plot_surface)
-from pyswarms.utils.search.random_search import RandomSearch
-from pyswarms.utils.search.grid_search import GridSearch
-import matplotlib.pyplot as plt
 import multiprocessing
 from multiprocessing import Pool
-from utils.debug_video import debug_video
+from typing import Any, List, Tuple
 
-class nbo_agent(dec_agent):
 
-    def __init__(self, horizon, sensor_para_list, agentid, dt, cdt, opt_step = -1,
-                L0 = 5, v = 5, isObsdyn__=True, isRotate = False, gamma = 1.0, 
-                ftol = 5e-3, gtol = 7, isParallel = True, SemanticMap=None, sigma = False, 
-                distriRollout = True, OccupancyMap=None, IsStatic = False,
-                factor = 5, penalty = 0, lite = False, central_kf = False, optmethod='de',
-                wtp = True, info_gain = False, action_space = None):
-        # TODO v = 5 delete
-        dec_agent.__init__(self, sensor_para_list, agentid, dt, cdt, L0 = L0, v = v, isObsdyn__=isObsdyn__, 
+class nbo_agent(dec_agent_jpda):
+    '''
+    Nonimal Belief Optimization agent: makes decision based on 
+    others policy and the approximation provided by nominal trajectories
+    '''
+    def __init__(
+            self, 
+            horizon: int, 
+            sensor_para_list: dict, 
+            agentid: int, 
+            dt: float, 
+            cdt: float, 
+            opt_step: int = -1,
+            L0: int = 5, 
+            isObsdyn: bool =True, 
+            isRotate: bool = False,
+            gamma: float = 1.0, 
+            ftol: float = 5e-3, 
+            gtol: float = 7, 
+            isParallel: bool = True, 
+            SemanticMap: Any=None, 
+            sigma: bool = False, 
+            distriRollout: bool = True, 
+            OccupancyMap: bool=None, 
+            IsStatic:bool = False,
+            factor: float = 5, 
+            penalty: float = 0, 
+            lite: bool = False, 
+            central_kf:bool = False, 
+            optmethod: str='de',
+            wtp: bool = True, 
+            info_gain:bool = False
+        ):
+        
+        dec_agent_jpda.__init__(self, sensor_para_list, agentid, dt, cdt, L0 = L0, isObsdyn=isObsdyn, 
             isRotate = isRotate, NoiseResistant =False, SemanticMap=SemanticMap, OccupancyMap=OccupancyMap, 
             sigma = sigma, IsStatic = IsStatic)
         self.sensor_num = len(sensor_para_list)
@@ -824,7 +840,7 @@ class nbo_agent(dec_agent):
         for i in range(self.sensor_num):
             if i in self.neighbor["id"] or i==self.id:
                 id_list.append(i)
-                ego = dec_agent(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
+                ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
                             L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, 
                             isRotate = self.isRotate, isVirtual = True, SemanticMap=self.SemanticMap)
                 
@@ -839,7 +855,7 @@ class nbo_agent(dec_agent):
                         self.sensor_para_list[i]["r0"], quality=self.sensor_para_list[i]["quality"])
                         kf.init = False
                     else:
-                        kf = util.EKFcontrol(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
+                        kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
                         self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], self.sensor_para_list[i]["r"]]))
                         
                         kf.init = False
@@ -884,7 +900,7 @@ class nbo_agent(dec_agent):
             z_k = self.trajInTime[i]
             semantic_zk = []
             for z in z_k:
-                semantic_zk.append(self.InsideObstacle([z[0], z[1]]))
+                semantic_zk.append(self.isInsideOcclusion([z[0], z[1]]))
             
             # feed info to sensors
             for agent in agent_list:
@@ -930,7 +946,7 @@ class nbo_agent(dec_agent):
                 track = info_list[egoIndex].tracks[l]
                 PMatrix = np.matrix(track.P).reshape(4, 4)[0:2, 0:2]
                 # pose = Point(track.x[0], track.x[1])
-                # weight = 1 - 0.9 * self.InsideObstacle(pose)
+                # weight = 1 - 0.9 * self.isInsideOcclusion(pose)
                 trace = np.trace(PMatrix)
                 P_list_i.append(trace)
                 
@@ -992,7 +1008,7 @@ class nbo_agent(dec_agent):
         for i in range(len(self.sensor_para_list)):
             if i in self.neighbor["id"] or i==self.id:
                 id_list.append(i)
-                ego = dec_agent(copy.deepcopy(self.sensor_para_list[i]), i, self.SampleDt, self.cdt, 
+                ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list[i]), i, self.SampleDt, self.cdt, 
                             L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, 
                             isRotate = self.isRotate, isVirtual = True, SemanticMap=self.SemanticMap)
                 
@@ -1006,7 +1022,7 @@ class nbo_agent(dec_agent):
                         self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], self.sensor_para_list[i]["r"]]), 
                         self.sensor_para_list[i]["r0"], quality=self.sensor_para_list[i]["quality"])
                     else:
-                        kf = util.EKFcontrol(self.SampleF, self.tracker.H, x0, P0, self.SampleQ, 
+                        kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.SampleQ, 
                         self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], self.sensor_para_list[i]["r"]]), 
                         )
                     ego.tracker.append(kf)
@@ -1044,7 +1060,7 @@ class nbo_agent(dec_agent):
             semantic_zk = []
             for z in z_k:
                 
-                semantic_zk.append(self.InsideObstacle([z[0], z[1]]))
+                semantic_zk.append(self.isInsideOcclusion([z[0], z[1]]))
             
             # feed info to sensors
             for agent in agent_list:
@@ -1077,7 +1093,7 @@ class nbo_agent(dec_agent):
                 PMatrix = np.matrix(track.P).reshape(4, 4)
 
                 # pose = Point(track.x[0], track.x[1])
-                # weight = 1 - 0.9 * self.InsideObstacle(pose)
+                # weight = 1 - 0.9 * self.isInsideOcclusion(pose)
                 objValue += np.trace(PMatrix) # (self.gamma ** i) # * weight
 
             # 4. agent movement base policy
@@ -1124,7 +1140,7 @@ class nbo_agent(dec_agent):
         for i in range(self.sensor_num):
             if i in self.neighbor["id"] or i==self.id:
                 id_list.append(i)
-                ego = dec_agent(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
+                ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
                             L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, sigma=self.sigma,
                             isRotate = self.isRotate, isVirtual = True, SemanticMap=self.SemanticMap)
                 
@@ -1138,7 +1154,7 @@ class nbo_agent(dec_agent):
                         self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], self.sensor_para_list[i]["r"]]), 
                         self.sensor_para_list[i]["r0"], quality=self.sensor_para_list[i]["quality"])
                     else:
-                        kf = util.EKFcontrol(self.SampleF, self.tracker.H, x0, P0, self.tracker.Q, 
+                        kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.tracker.Q, 
                         self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], self.sensor_para_list[i]["r"]]), 
                         )
                     ego.tracker.append(kf)
@@ -1202,7 +1218,7 @@ class nbo_agent(dec_agent):
                 track = info_list[egoIndex].tracks[l]
                 PMatrix = np.matrix(track.P).reshape(4, 4)[0:2, 0:2]
                 # pose = Point(track.x[0], track.x[1])
-                # weight = 1 - 0.9 * self.InsideObstacle(pose)
+                # weight = 1 - 0.9 * self.isInsideOcclusion(pose)
                 trace = np.trace(PMatrix)
                 
                 P_list_i.append(trace)
@@ -1249,7 +1265,7 @@ class nbo_agent(dec_agent):
         for i in range(len(self.sensor_para_list)):
             if i in self.neighbor["id"] or i==self.id:
                 
-                ego = dec_agent(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
+                ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
                         L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, isRotate = self.isRotate, 
                         isVirtual = True, SemanticMap=self.SemanticMap)
                 
@@ -1266,7 +1282,7 @@ class nbo_agent(dec_agent):
                             quality=self.sensor_para_list[i]["quality"])
                         
                     else:
-                        kf = util.EKFcontrol(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
+                        kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
                             self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
                             self.sensor_para_list[i]["r"]]))
                     kf.init = False
@@ -1292,7 +1308,7 @@ class nbo_agent(dec_agent):
                 z = z_k[j]
                 
                 agent_list[0].tracker[j].predict()
-                if self.InsideObstacle([z[0], z[1]]):
+                if self.isInsideOcclusion([z[0], z[1]]):
                     # get occluded, skip update
                     for k in range(neighbor_num):
                         agent_list[k].tracker[j].x_k_k = copy.deepcopy(agent_list[0].tracker[j].x_k_k_min)
@@ -1364,7 +1380,7 @@ class nbo_agent(dec_agent):
             # for j in range(len(self.trajInTime[-1])):
             #     z = self.trajInTime[-1][j]            
                 
-            #     if self.InsideObstacle([z[0], z[1]]):
+            #     if self.isInsideOcclusion([z[0], z[1]]):
             #         continue
             #     isoutside = True
             #     for k in range(neighbor_num):
@@ -1390,7 +1406,7 @@ class nbo_agent(dec_agent):
             for j in range(len(self.trajInTime[-1])):
                 z = self.trajInTime[-1][j]            
                 
-                if self.InsideObstacle([z[0], z[1]]):
+                if self.isInsideOcclusion([z[0], z[1]]):
                     continue
                 isoutside = True
                 for k in range(neighbor_num):
@@ -1440,7 +1456,7 @@ class nbo_agent(dec_agent):
         for i in range(len(self.sensor_para_list)):
             if i in self.neighbor["id"] or i==self.id:
                 
-                ego = dec_agent(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
+                ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
                         L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, isRotate = self.isRotate, 
                         isVirtual = True, SemanticMap=self.SemanticMap)
                 
@@ -1457,7 +1473,7 @@ class nbo_agent(dec_agent):
                             quality=self.sensor_para_list[i]["quality"])
                         
                     else:
-                        kf = util.EKFcontrol(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
+                        kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
                             self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
                             self.sensor_para_list[i]["r"]]))
                     kf.init = False
@@ -1482,7 +1498,7 @@ class nbo_agent(dec_agent):
                 z = z_k[j]
                 
                 agent_list[0].tracker[j].predict()
-                if not self.InsideObstacle([z[0], z[1]]):
+                if not self.isInsideOcclusion([z[0], z[1]]):
                     # do sequential update, use P = [P^-1 + \sum_i H^T R^-1_i H] ^ -1
                     index = -1
                     R = np.matrix(np.zeros((2, 2)))
@@ -1536,7 +1552,7 @@ class nbo_agent(dec_agent):
             for j in range(len(self.trajInTime[-1])):
                 z = self.trajInTime[-1][j]            
                 
-                if self.InsideObstacle([z[0], z[1]]):
+                if self.isInsideOcclusion([z[0], z[1]]):
                     continue
                 isoutside = True
                 for k in range(neighbor_num):
@@ -1604,7 +1620,7 @@ class nbo_agent(dec_agent):
         for i in range(len(self.sensor_para_list)):
             if i in self.neighbor["id"] or i==self.id:
                 
-                ego = dec_agent(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
+                ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
                         L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, isRotate = self.isRotate, 
                         isVirtual = True, SemanticMap=self.SemanticMap)
                 
@@ -1621,7 +1637,7 @@ class nbo_agent(dec_agent):
                             quality=self.sensor_para_list[i]["quality"])
                         
                     else:
-                        kf = util.EKFcontrol(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
+                        kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
                             self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
                             self.sensor_para_list[i]["r"]]))
                     kf.init = False
@@ -1649,7 +1665,7 @@ class nbo_agent(dec_agent):
                 agent_list[0].tracker[j].predict()
 
                 prior_trace += np.trace(agent_list[0].tracker[j].P_k_k_min[0:2, 0:2])
-                if self.InsideObstacle([z[0], z[1]]):
+                if self.isInsideOcclusion([z[0], z[1]]):
                     # get occluded, skip update
                     for k in range(neighbor_num):
                         agent_list[k].tracker[j].x_k_k = copy.deepcopy(agent_list[0].tracker[j].x_k_k_min)
@@ -1731,7 +1747,7 @@ class nbo_agent(dec_agent):
             for j in range(len(self.trajInTime[-1])):
                 z = self.trajInTime[-1][j]            
                 
-                if self.InsideObstacle([z[0], z[1]]):
+                if self.isInsideOcclusion([z[0], z[1]]):
                     continue
                 isoutside = True
                 for k in range(neighbor_num):

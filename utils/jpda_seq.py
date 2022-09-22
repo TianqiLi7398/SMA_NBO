@@ -5,11 +5,9 @@ from numpy.linalg import inv
 import copy
 from scipy.stats import multivariate_normal
 from scipy.stats.distributions import chi2
-from numpy import linalg as LA
-# from matplotlib.patches import Ellipse
-from utils.util import EKFcontrol, dynamic_kf, measurement, track
+from utils.util import LinearKF, dynamic_kf, measurement, track
 
-def normalize(a_list):
+def normalize(a_list: list) -> list:
     the_sum = sum(a_list)
     a_list = a_list / the_sum
     return a_list
@@ -579,7 +577,7 @@ class jpda_seq:
             for i in obs_outside_index:
                 z = z_k[i] + [0, 0]
                 x0 = np.matrix(z).T
-                kf = EKFcontrol(self.F, self.H, x0, self.P, self.Q, self.R_list[l])
+                kf = LinearKF(self.F, self.H, x0, self.P, self.Q, self.R_list[l])
                 id_ = len(self.track_list)
                 new_track = track_seq(t, id_, kf, self.DeletionThreshold, self.ConfirmationThreshold, self.sensor_num)
                 new_track.kf.predict()

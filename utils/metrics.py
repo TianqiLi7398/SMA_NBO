@@ -1,16 +1,17 @@
 import numpy as np 
 from scipy.optimize import linear_sum_assignment   # Hungarian alg, minimun bipartite matching
+from typing import Any, List, Tuple
 
 
 class ospa:
     @staticmethod
-    def dist(x, y):
+    def dist(x: list, y: list) -> float:
         dx = x[0] - y[0]
         dy = x[1] - y[1]
         return np.sqrt(dx**2 + dy**2)
 
     @staticmethod
-    def pairing(traj_k, est_k):
+    def pairing(traj_k: list, est_k: list) -> Tuple[list, list, Any]:
         # find the set with minimun track number
         if len(traj_k) <= len(est_k):
             X, Y = traj_k, est_k
@@ -31,10 +32,19 @@ class ospa:
         return X, Y, result
 
     @staticmethod
-    def metrics(traj_k, est_k, c, p):
+    def metrics(traj_k: list, est_k: list, c: float, p: float) -> float:
         # ospa metric for multi target tracking from 
         # Schuhmacher, Dominic, Ba-Tuong Vo, and Ba-Ngu Vo. "A consistent metric for performance evaluation of multi-object filters." 
         # IEEE transactions on signal processing 56.8 (2008): 3447-3457.
+        '''
+        INPUT:
+        traj_k: true value of the trajecories
+        est_k: estimation of the trajectories
+        c: maximum allowable error
+        p: power of the value
+        OUTPUT:
+        ospa value
+        '''
         X, Y, result = ospa.pairing(traj_k, est_k)
         row_ind = result[1]
         sum_ = 0.0
@@ -51,10 +61,16 @@ class ospa:
         return (sum_ / n)**(1./p)
     
     @staticmethod
-    def metric_sep(traj_k, est_k, c, p):
-        # ospa metric for multi target tracking from 
-        # Schuhmacher, Dominic, Ba-Tuong Vo, and Ba-Ngu Vo. "A consistent metric for performance evaluation of multi-object filters." 
-        # IEEE transactions on signal processing 56.8 (2008): 3447-3457.
+    def metric_sep(traj_k: list, est_k: list, c: float, p: float) -> Tuple[float, int]:
+        '''
+        INPUT:
+        traj_k: true value of the trajecories
+        est_k: estimation of the trajectories
+        c: maximum allowable error
+        p: power of the value
+        OUTPUT:
+        ospa value, missings/additional trajectories (cardinality penality)
+        '''
         X, Y, result = ospa.pairing(traj_k, est_k)
         row_ind = result[1]
         sum_ = 0.0
@@ -72,10 +88,23 @@ class ospa:
     
 
     @staticmethod
-    def metric_counting_missing(traj_k, est_k, c, p):
-        # ospa metric for multi target tracking from 
-        # Schuhmacher, Dominic, Ba-Tuong Vo, and Ba-Ngu Vo. "A consistent metric for performance evaluation of multi-object filters." 
-        # IEEE transactions on signal processing 56.8 (2008): 3447-3457.
+    def metric_counting_missing(
+            traj_k: list, 
+            est_k: list,
+            c: float, 
+            p: float
+        ) -> Tuple[float, int, list]:
+        '''
+        INPUT:
+        traj_k: true value of the trajecories
+        est_k: estimation of the trajectories
+        c: maximum allowable error
+        p: power of the value
+        OUTPUT:
+        ospa value
+        missings/additional trajectories (cardinality penality)
+        list of errors for each trajectory
+        '''
         X, Y, result = ospa.pairing(traj_k, est_k)
         row_ind = result[1]
         missing_num = 0

@@ -1,11 +1,12 @@
 ''' make obstacles to an occupancy map'''
 
+from typing import Tuple
 import numpy as np
 
 class occupancy:
 
     @staticmethod
-    def create_tree_matrix(radius, dx):
+    def create_tree_matrix(radius: float, dx: float) -> np.ndarray:
         r = int(radius/dx)
         tree = np.zeros((2 * r + 1, 2 * r + 1))
         for i in range(2 * r + 1):
@@ -15,7 +16,13 @@ class occupancy:
         return tree
     
     @staticmethod
-    def occupancy_map(canvas, x_list, y_list, dx, radius):
+    def occupancy_map(
+            canvas: list, 
+            x_list: list, 
+            y_list: list, 
+            dx: float, 
+            radius: float
+        ) -> np.ndarray:
         a, b = canvas[0][1] - canvas[0][0], canvas[1][1] - canvas[1][0]
         X, Y = int(a/dx), int(b/dx)
         tree_occupancy = occupancy.create_tree_matrix(radius, dx)
@@ -44,7 +51,13 @@ class occupancy:
 
 
     @staticmethod
-    def determine_pos(X, Y, radius, x, y):
+    def determine_pos(
+            X: float, 
+            Y: float, 
+            radius: float, 
+            x: float, 
+            y: float
+        ) -> Tuple[float, float, float, float, int, int]:
         # x coordinates
         if x - radius < 0:
             x0 = radius - x
@@ -75,7 +88,12 @@ class occupancy:
         return x0, x1, y0, y1, row, col
     
     @staticmethod
-    def xy2rowcol(x, y, canvas, dx):
+    def xy2rowcol(
+            x: float, 
+            y: float, 
+            canvas: list, 
+            dx: float
+        ) -> Tuple[int, int]:
         col = round((x - canvas[0][0])/dx)
         row = round((canvas[1][1] - y)/dx - 1)
         return row, col

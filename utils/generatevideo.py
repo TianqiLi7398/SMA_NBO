@@ -1,12 +1,8 @@
 import numpy as np
-from utils.msg import Agent_basic, Single_track, Info_sense
-from utils.MonteCarloRollout import MCRollout
 from utils.effects import effects
-import random
 import copy
 import json
-import csv
-import os, sys
+import os
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -16,7 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.patches import Ellipse, Rectangle, FancyArrowPatch
 from matplotlib.text import Text
-import os, sys
+import os
 from scipy.stats.distributions import chi2
 from utils.metrics import ospa
 

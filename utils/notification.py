@@ -1,8 +1,6 @@
 import smtplib
-from smtplib import SMTPException
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-import datetime
 import getpass
 
 class secretary:

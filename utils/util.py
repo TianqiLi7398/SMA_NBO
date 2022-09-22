@@ -2,7 +2,7 @@ import numpy as np
 from numpy.linalg import inv
 import copy
 
-class EKFcontrol:
+class LinearKF:
     # here actually a standard Linear KF is implemented 
     def __init__(self, _F,_H,_x,_P,_Q,_R, q0 = 1):
         
@@ -27,13 +27,14 @@ class EKFcontrol:
         self.Q0 = np.diag([q0, q0, q0, q0])
         self.init = True
     
-    def getCurrentState(self):
+    def getCurrentState(self) -> np.ndarray:
         return self.x_k_k_min
     
-    def getEst(self):
+    def getEst(self) -> np.ndarray:
         return np.dot(self.H, self.x_k_k)
     
     def predict(self):
+        # KF prediction step 
         self.x_k_k_min = np.dot(self.F, self.x_k_k)
         if not self.init:
             self.P_k_k_min = np.dot(self.F, np.dot(self.P_k_k,self.F.T)) + self.Q
@@ -41,7 +42,8 @@ class EKFcontrol:
             self.P_k_k_min = np.dot(self.F, np.dot(self.P_k_k,self.F.T)) + self.Q0
             self.init = False
         
-    def update(self,z, r=-1):
+    def update(self, z: list, r: float =-1):
+        # posterior update in KF
         if r > 0:
             self.R = np.diag([r, r])
         z = np.matrix(z).T
@@ -59,10 +61,10 @@ class EKFcontrol:
 
         self.isUpdated = True
 
-class dynamic_kf(EKFcontrol):
+class dynamic_kf(LinearKF):
 
     def __init__(self, _F,_H,_x,_P,_Q,_R, r0, quality = 1.0):
-        EKFcontrol.__init__(self, _F,_H,_x,_P,_Q,_R)
+        LinearKF.__init__(self, _F,_H,_x,_P,_Q,_R)
         # this alpha factor is a scalar for R matrix for sepcific sensor
         # which can be regarded as sensing quality
         self.alpha = quality
