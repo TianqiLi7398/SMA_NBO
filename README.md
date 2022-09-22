@@ -13,7 +13,7 @@ This code base contains the following functionality
 
 ### Prerequisite
 
-Please check the prerequisite readme for details.
+Please check the [prerequisite readme](https://github.com/TianqiLi7398/SMA_NBO/blob/main/data/env/prerequisite.md) for details.
 
 ### 1. Simulation of Multi-UAV tracking
 
