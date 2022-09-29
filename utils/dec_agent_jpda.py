@@ -37,12 +37,11 @@ class dec_agent_jpda(dec_jpda):
             t0: float = 0, 
             SemanticMap: Any =None, 
             OccupancyMap: Any =None, 
-            sigma: bool = False
         ):
         dec_jpda.__init__(self, sensor_para_list, agentid, dt, L = L0, 
             isObsdyn_=isObsdyn, NoiseResistant =NoiseResistant, 
             isVirtual=isVirtual, t0 = t0, SemanticMap=SemanticMap,
-            OccupancyMap=OccupancyMap, sigma=sigma, IsStatic = IsStatic)
+            OccupancyMap=OccupancyMap, IsStatic = IsStatic)
         self.dm = sensor_para_list[agentid]["dm"]      # the diameter limit for sensor's local base policy
         self.dm = 40
         self.v = [0,0]

@@ -17,9 +17,34 @@ Please check the [prerequisite readme](https://github.com/TianqiLi7398/SMA_NBO/b
 
 ### 1. Simulation of Multi-UAV tracking
 
+**Monte Carlo - Multi-Agent Rollout (MCR)**
 
+
+**Sequential Multi-Agent - Nominal Belief Optimization (SMA-NBO)**
+
+```
+isParallel=False, IsDistriOpt=True, 
+```
+
+**Centralized - NBO**
+
+```
+isParallel=False, IsDistriOpt=False,
+```
+
+**Decentralized POMDP (Dec-POMDP)**
+```
+isParallel=True, IsDistriOpt=False,
+```
+
+**PMA-NBO**
+```
+isParallel=True, IsDistriOpt=True, 
+```
 
 ### 2. Visualization
+
+`$ python3 visual.py`
 
 ### 3. Evaluation
 

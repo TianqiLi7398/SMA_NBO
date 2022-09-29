@@ -32,16 +32,11 @@ class simulator:
             traj_type: str = 'normal', 
             info_gain: bool = False, 
             useSemantic: bool = True, 
-            dropout_pattern: Any = None, 
-            dropout_prob: float = 0.0, 
-            dv: float = 1e0
         ) -> str:
         print(optmethod, deci_Schema)
         if optmethod == 'pso':
             filename = deci_Schema + '_horizon_'+str(horizon)+'_ftol_' + str(ftol) + '_gtol_' + str(gtol) + '_' + \
                     optmethod + '_seq_' + str(seq)
-        elif optmethod == 'discrete':
-            filename = deci_Schema + '_horizon_'+ str(horizon)+ '_' + optmethod + '_' + str(dv)
         else:
             raise RuntimeError("optmethod %s not defined!" % optmethod)
         
@@ -74,8 +69,6 @@ class simulator:
         if info_gain:
             filename += info_gain   # 'info_gain', 'info_acc', 'log_det', 'cov_gain'
         
-        if dropout_pattern != None:
-            filename += dropout_pattern + '_p=' + str(dropout_prob)
 
         print(filename)
         return filename
@@ -173,8 +166,8 @@ class simulator:
             return action_space_h_team_done
 
     @staticmethod
-    def MCRollout_distributed(iteration, horizon, ftol, gtol, MCSnum, wtp, env, info_gain = False, lite=False, 
-        central_kf=False, seq=0, optmethod='de', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal',
+    def MCRollout_distributed(iteration, horizon, ftol, gtol, MCSnum, wtp, env, info_gain = False, 
+        central_kf=False, seq=0, optmethod='pso', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal',
         repeated = -1):
         start_time = time.time()
         '''SMA-MCR'''
@@ -238,7 +231,7 @@ class simulator:
             if env in ['parksim', 'simple1', 'simple2']:
                 ego = MCRollout(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                     L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                    SemanticMap=SemanticMap, isParallel=False, distriRollout=True, lite=lite, 
+                    SemanticMap=SemanticMap,  distriRollout=True, 
                     central_kf=central_kf, optmethod=optmethod, factor=5, opt_step=1, MCSnum = MCSnum,
                     wtp=wtp, info_gain = info_gain, IsStatic = (traj_type == 'static'))
                 
@@ -246,7 +239,7 @@ class simulator:
                 
                 ego = MCRollout(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                     L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                    OccupancyMap=CircleMap, isParallel=False, distriRollout=True, lite=lite, 
+                    OccupancyMap=CircleMap,  distriRollout=True, 
                     central_kf=central_kf, optmethod=optmethod, factor=5, opt_step=1, MCSnum = MCSnum,
                     wtp=wtp, info_gain = info_gain, IsStatic = (traj_type == 'static'))
             else: raise RuntimeError('No clear env defined as %s' % env)
@@ -292,7 +285,7 @@ class simulator:
             
             # 1. feed info to sensors
             for agent in agent_list:
-                info_0, z_k_out, size_k_out = agent.sim_detection_callback(copy.deepcopy(z_k), t)
+                info_0, z_k_out, _ = agent.sim_detection_callback(copy.deepcopy(z_k), t)
                 info_list.append(info_0)                
                 obs_k += z_k_out
                 
@@ -332,14 +325,14 @@ class simulator:
             if (np.isclose(t - tc - cdt, 0) or t-tc >= cdt) and not np.isclose(t, time_set[-1]):
                 
                 # decision making frequency
-                # tc = t
+                
                 u = []                
                 # Rollout agent by agent
                 for agent in agent_list:
                     agent.base_policy()
                     u.append(agent.v)
                 for agent in agent_list:
-                    u = agent.rollout(u)
+                    u = agent.planning(u)
                 
                 # record all actions to generate the plan in near future
                 rollout_policy.append(copy.deepcopy(u))
@@ -373,8 +366,8 @@ class simulator:
             json.dump(output_data, outfiles, indent=4)
     
     @staticmethod
-    def MCRollout_central(iteration, horizon, ftol, gtol, MCSnum, wtp, lite=False, central_kf=False, seq=0, 
-        optmethod='de', leader=0, repeated = -1):
+    def MCRollout_central(iteration, horizon, ftol, gtol, MCSnum, wtp, central_kf=False, seq=0, 
+        optmethod='pso', leader=0, repeated = -1):
         start_time = time.time()
         
         isObsDyn = True
@@ -431,7 +424,7 @@ class simulator:
         for i in range(len(sensor_para_list)):
             ego = MCRollout(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                 L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                SemanticMap=SemanticMap, isParallel=False, distriRollout=False, lite=lite, 
+                SemanticMap=SemanticMap, distriRollout=False, 
                 central_kf=central_kf, optmethod=optmethod, factor=5, opt_step=1, MCSnum = MCSnum)
             agent_list.append(ego)
                         
@@ -473,7 +466,7 @@ class simulator:
             
             # 1. feed info to sensors
             for agent in agent_list:
-                info_0, z_k_out, size_k_out = agent.sim_detection_callback(copy.deepcopy(z_k), t)
+                info_0, z_k_out, _ = agent.sim_detection_callback(copy.deepcopy(z_k), t)
                 info_list.append(info_0)
                 obs_k += z_k_out
                 
@@ -514,7 +507,7 @@ class simulator:
                 # decision making frequency
                 # centralized planning by a leader
                 u = [[0,0]] * len(agent_list)
-                u = agent_list[leader].rollout(u)
+                u = agent_list[leader].planning(u)
                 for ag_nb in range(len(agent_list)):
                     agent = agent_list[ag_nb]
                     agent.v = u[ag_nb]
@@ -549,18 +542,18 @@ class simulator:
                 
 
     @staticmethod
-    def NBO_distr(iteration, horizon, ftol, gtol, wtp, env, useSemantic, info_gain = False, lite=False, central_kf=False, seq=0, 
-        optmethod='de', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal', repeated = -1):
+    def SMA_NBO(iteration, horizon, ftol, gtol, wtp, env, useSemantic, info_gain = False, central_kf=False, seq=0, 
+        optmethod='pso', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal', repeated = -1):
         '''SMA-NBO'''
-        action_space = simulator.generate_discrete_action_space(horizon, 1)
+        
         start_time = time.time()
         
         isObsDyn = True
         isRotate = False
         
         data2save = simulator.filename_generator(horizon, ftol, gtol, wtp, env, seq, central_kf, optmethod, 
-            'sma', 'nbo', lambda0 = lambda0, r=r, traj_type = traj_type, info_gain = info_gain, useSemantic = useSemantic,
-            )
+            'sma', 'nbo', lambda0 = lambda0, r=r, traj_type = traj_type, info_gain = info_gain, 
+            useSemantic = useSemantic,)
         
         path = os.getcwd()
         dataPath = os.path.join(path, 'data', 'result', 'nbo', env, data2save)
@@ -602,23 +595,18 @@ class simulator:
                 
                 ego = nbo_agent(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                     L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                    SemanticMap=SemanticMap, isParallel=False, distriRollout=True, lite=lite, 
+                    SemanticMap=SemanticMap,  IsDistriOpt=True, 
                     central_kf=central_kf, optmethod=optmethod, factor=5, wtp=wtp, info_gain = info_gain,
                     IsStatic = (traj_type == 'static'))
             elif env == 'poisson':
                 
                 ego = nbo_agent(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                     L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                    OccupancyMap=CircleMap, isParallel=False, distriRollout=True, lite=lite, 
+                    OccupancyMap=CircleMap,  IsDistriOpt=True, 
                     central_kf=central_kf, optmethod=optmethod, factor=5, wtp=wtp, info_gain = info_gain,
-                    IsStatic = (traj_type == 'static'), action_space=action_space)
+                    IsStatic = (traj_type == 'static'))
             else: raise RuntimeError('No clear env defined as %s' % env)
-            # ego.tracker.DeletionThreshold = [30, 40]
-            # ego = agent_simulation.agent(sensor_para_list[i], i, dc_list[i], dt_list[i], L = N)
-
-            # initalize all tracks
-            # for track_ in track_init:
-            #     ego.tracker.add_track(track_, 0)
+            
             if traj_type == 'static':
                 # add init target value to all agents
                 for j in range(len(xs)):
@@ -629,10 +617,6 @@ class simulator:
                             ego.sensor_para_list[ego.id]["quality"] * np.diag([ego.sensor_para_list[ego.id]["r"], 
                             ego.sensor_para_list[ego.id]["r"]]), ego.sensor_para_list[ego.id]["r0"], 
                             quality= ego.sensor_para_list[ego.id]["quality"])
-                    # else:
-                    #     kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
-                    #         self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
-                    #         self.sensor_para_list[i]["r"]]))
                     kf.init = False
                     
                     new_track = util.track(0, j, kf, ego.tracker.DeletionThreshold, ego.tracker.ConfirmationThreshold)
@@ -735,27 +719,14 @@ class simulator:
                     agent_start_time = time.time()
                     # intention passed from previous agent
                     agent.update_group_decision(plan_msg)
-                    u_index = agent.rollout()
+                    u_index = agent.planning()
                     decision_time[index].append(time.time() - agent_start_time)
                     u_record.append(u_index)
-                    
-                    # # dropout pattern: agent cannot send its policy out
-                    # if dropout_pattern in ['fail_publisher', 'fail_channel']:
-                    #     if random.random() > dropout_prob:
-                    #         # with prob of drop_out_prob to fail sending the plan to others
                     plan_msg.push(u_index,t, index)
 
                 
                 missing_record.append(plan_msg.miss())
                 
-                # grab just first action in the action list
-                # cur_u = []
-                # for u_i in u:
-                #     cur_u.append(u_i[0])
-
-                # rollout_policy.append(cur_u)
-
-                # record all actions to generate the plan in near future
                 rollout_policy.append(copy.deepcopy(u_record))
                 info_value.append(agent_list[-1].opt_value)
             # update position given policy u
@@ -788,11 +759,11 @@ class simulator:
             json.dump(output_data, outfiles, indent=4)
     
     @staticmethod
-    def NBO_central(iteration, horizon, ftol, gtol, wtp, env, useSemantic, info_gain = False, lite=False, central_kf=False, seq=0, 
-        optmethod='de', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal', repeated = -1):
+    def NBO_central(iteration, horizon, ftol, gtol, wtp, env, useSemantic, info_gain = False, central_kf=False, seq=0, 
+        optmethod='pso', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal', repeated = -1):
         action_space = simulator.generate_discrete_action_space(horizon, 3)
         start_time = time.time()
-        '''cen-NBO'''
+        '''centralized optimization of NBO'''
         isObsDyn = True
         isRotate = False
         
@@ -840,23 +811,18 @@ class simulator:
                 
                 ego = nbo_agent(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                     L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                    SemanticMap=SemanticMap, isParallel=False, distriRollout=False, lite=lite, 
+                    SemanticMap=SemanticMap,  IsDistriOpt=False, 
                     central_kf=central_kf, optmethod=optmethod, factor=5, wtp=wtp, info_gain = info_gain,
                     IsStatic = (traj_type == 'static'))
             elif env == 'poisson':
                 
                 ego = nbo_agent(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                     L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                    OccupancyMap=CircleMap, isParallel=False, distriRollout=False, lite=lite, 
+                    OccupancyMap=CircleMap,  IsDistriOpt=False, 
                     central_kf=central_kf, optmethod=optmethod, factor=5, wtp=wtp, info_gain = info_gain,
                     IsStatic = (traj_type == 'static'), action_space=action_space)
             else: raise RuntimeError('No clear env defined as %s' % env)
-            # ego.tracker.DeletionThreshold = [30, 40]
-            # ego = agent_simulation.agent(sensor_para_list[i], i, dc_list[i], dt_list[i], L = N)
 
-            # initalize all tracks
-            # for track_ in track_init:
-            #     ego.tracker.add_track(track_, 0)
             if traj_type == 'static':
                 # add init target value to all agents
                 for j in range(len(xs)):
@@ -867,10 +833,6 @@ class simulator:
                             ego.sensor_para_list[ego.id]["quality"] * np.diag([ego.sensor_para_list[ego.id]["r"], 
                             ego.sensor_para_list[ego.id]["r"]]), ego.sensor_para_list[ego.id]["r0"], 
                             quality= ego.sensor_para_list[ego.id]["quality"])
-                    # else:
-                    #     kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
-                    #         self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
-                    #         self.sensor_para_list[i]["r"]]))
                     kf.init = False
                     
                     new_track = util.track(0, j, kf, ego.tracker.DeletionThreshold, ego.tracker.ConfirmationThreshold)
@@ -920,7 +882,7 @@ class simulator:
             
             # 1. feed info to sensors
             for agent in agent_list:
-                info_0, z_k_out, size_k_out = agent.sim_detection_callback(copy.deepcopy(z_k), t)
+                info_0, z_k_out, _ = agent.sim_detection_callback(copy.deepcopy(z_k), t)
                 info_list.append(info_0)                
                 obs_k += z_k_out
                 
@@ -958,29 +920,14 @@ class simulator:
             
             if (np.isclose(t - tc - cdt, 0) or t-tc >= cdt) and not np.isclose(t, time_set[-1]):
                 
-                # decision making frequency
-                # tc = t
-                u = []
-                # for agent in agent_list:
-                #     u.append(agent.base_policy())
-                    # u.append(agent.v)
-                # rollout_policy.append(u)
+                # decision making step
                 
-                # Rollout agent by agent
-                
-                u = agent_list[0].rollout(u)
+                u = agent_list[0].planning()
                 # broadcast this final u to all agents
                 for i in range(len(agent_list)):
                     action = u[i][0]
                     agent = agent_list[i]
                     agent.v = copy.deepcopy(action)
-
-                # grab just first action in the action list
-                # cur_u = []
-                # for u_i in u:
-                #     cur_u.append(u_i[0])
-
-                # rollout_policy.append(cur_u)
 
                 # record all actions to generate the plan in near future
                 rollout_policy.append(copy.deepcopy(u))
@@ -1013,8 +960,8 @@ class simulator:
             json.dump(output_data, outfiles, indent=4)
 
     @staticmethod
-    def PMA_NBO(iteration, horizon, ftol, gtol, wtp, env, useSemantic, info_gain = False, lite=False, central_kf=False, seq=0, 
-        optmethod='de', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal', repeated = -1, dropout_pattern = None,
+    def PMA_NBO(iteration, horizon, ftol, gtol, wtp, env, useSemantic, info_gain = False, central_kf=False, seq=0, 
+        optmethod='pso', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal', repeated = -1, dropout_pattern = None,
         dropout_prob = 0.0):
 
         start_time = time.time()        
@@ -1068,23 +1015,18 @@ class simulator:
                 
                 ego = nbo_agent(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                     L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                    SemanticMap=SemanticMap, isParallel=True, distriRollout=True, lite=lite, 
+                    SemanticMap=SemanticMap, IsDistriOpt=True, 
                     central_kf=central_kf, optmethod=optmethod, factor=5, wtp=wtp, info_gain = info_gain,
                     IsStatic = (traj_type == 'static'))
             elif env == 'poisson':
                 
                 ego = nbo_agent(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                     L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                    OccupancyMap=CircleMap, isParallel=True, distriRollout=True, lite=lite, 
+                    OccupancyMap=CircleMap, IsDistriOpt=True, 
                     central_kf=central_kf, optmethod=optmethod, factor=5, wtp=wtp, info_gain = info_gain,
                     IsStatic = (traj_type == 'static'))
             else: raise RuntimeError('No clear env defined as %s' % env)
-            # ego.tracker.DeletionThreshold = [30, 40]
-            # ego = agent_simulation.agent(sensor_para_list[i], i, dc_list[i], dt_list[i], L = N)
 
-            # initalize all tracks
-            # for track_ in track_init:
-            #     ego.tracker.add_track(track_, 0)
             if traj_type == 'static':
                 # add init target value to all agents
                 for j in range(len(xs)):
@@ -1095,10 +1037,7 @@ class simulator:
                             ego.sensor_para_list[ego.id]["quality"] * np.diag([ego.sensor_para_list[ego.id]["r"], 
                             ego.sensor_para_list[ego.id]["r"]]), ego.sensor_para_list[ego.id]["r0"], 
                             quality= ego.sensor_para_list[ego.id]["quality"])
-                    # else:
-                    #     kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
-                    #         self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
-                    #         self.sensor_para_list[i]["r"]]))
+                    
                     kf.init = False
                     
                     new_track = util.track(0, j, kf, ego.tracker.DeletionThreshold, ego.tracker.ConfirmationThreshold)
@@ -1196,7 +1135,7 @@ class simulator:
                 for index, agent in enumerate(agent_list):
                     '''agent make decision in parallel, based on other agents previous decision'''
                     agent_start_time = time.time()
-                    u_index = agent.rollout()
+                    u_index = agent.planning()
                     decision_time[index].append(time.time() - agent_start_time)
                     u_record.append(u_index)
                     
@@ -1214,12 +1153,6 @@ class simulator:
                 missing_record.append(plan_msg.miss())
                 plan_msg.clean()
                 
-                # grab just first action in the action list
-                # cur_u = []
-                # for u_i in u:
-                #     cur_u.append(u_i[0])
-
-                # rollout_policy.append(cur_u)
 
                 # record all actions to generate the plan in near future
                 rollout_policy.append(copy.deepcopy(u_record))
@@ -1255,8 +1188,8 @@ class simulator:
 
     
     @staticmethod
-    def decPOMDP_NBO(iteration, horizon, ftol, gtol, wtp, env, useSemantic, info_gain = False, lite=False, central_kf=False, seq=0, 
-        optmethod='de', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal', repeated=-1):
+    def decPOMDP_NBO(iteration, horizon, ftol, gtol, wtp, env, useSemantic, info_gain = False, central_kf=False, seq=0, 
+        optmethod='pso', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal', repeated=-1):
 
         start_time = time.time()        
         isObsDyn = True
@@ -1283,7 +1216,6 @@ class simulator:
                 return
 
         # env parameter and traj parameter
-        # env parameter and traj parameter
         data, traj, SemanticMap, CircleMap = simulator.map_traj_doc(env, traj_type, useSemantic, r, lambda0, iteration)
         
         agent_seq = data["seq"][str(seq)]
@@ -1307,23 +1239,18 @@ class simulator:
                 
                 ego = nbo_agent(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                     L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                    SemanticMap=SemanticMap, isParallel=True, distriRollout=False, lite=lite, 
+                    SemanticMap=SemanticMap,IsDistriOpt=False, 
                     central_kf=central_kf, optmethod=optmethod, factor=5, wtp=wtp, info_gain = info_gain,
                     IsStatic = (traj_type == 'static'))
             elif env == 'poisson':
                 
                 ego = nbo_agent(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
                     L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
-                    OccupancyMap=CircleMap, isParallel=True, distriRollout=False, lite=lite, 
+                    OccupancyMap=CircleMap,IsDistriOpt=False, 
                     central_kf=central_kf, optmethod=optmethod, factor=5, wtp=wtp, info_gain = info_gain,
                     IsStatic = (traj_type == 'static'))
             else: raise RuntimeError('No clear env defined as %s' % env)
-            # ego.tracker.DeletionThreshold = [30, 40]
-            # ego = agent_simulation.agent(sensor_para_list[i], i, dc_list[i], dt_list[i], L = N)
 
-            # initalize all tracks
-            # for track_ in track_init:
-            #     ego.tracker.add_track(track_, 0)
             if traj_type == 'static':
                 # add init target value to all agents
                 for j in range(len(xs)):
@@ -1334,10 +1261,6 @@ class simulator:
                             ego.sensor_para_list[ego.id]["quality"] * np.diag([ego.sensor_para_list[ego.id]["r"], 
                             ego.sensor_para_list[ego.id]["r"]]), ego.sensor_para_list[ego.id]["r0"], 
                             quality= ego.sensor_para_list[ego.id]["quality"])
-                    # else:
-                    #     kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.factor * self.tracker.Q, 
-                    #         self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
-                    #         self.sensor_para_list[i]["r"]]))
                     kf.init = False
                     
                     new_track = util.track(0, j, kf, ego.tracker.DeletionThreshold, ego.tracker.ConfirmationThreshold)
@@ -1388,7 +1311,7 @@ class simulator:
             
             # 1. feed info to sensors
             for agent in agent_list:
-                info_0, z_k_out, size_k_out = agent.sim_detection_callback(copy.deepcopy(z_k), t)
+                info_0, z_k_out, _ = agent.sim_detection_callback(copy.deepcopy(z_k), t)
                 info_list.append(info_0)                
                 obs_k += z_k_out
                 
@@ -1435,14 +1358,10 @@ class simulator:
                 for index, agent in enumerate(agent_list):
                     '''agent make decision in parallel in the manner of dec-POMDP'''
                     agent_start_time = time.time()
-                    u_index = agent.rollout()
+                    u_index = agent.planning()
                     decision_time[index] = time.time() - agent_start_time
                     u.append(u_index)
                     decision_values.append(agent.opt_value)
-
-                # NO broadcast this final u to all agents
-                # for agent in agent_list:
-                #     agent.update_group_decision(u)
                 
                 # record all actions to generate the plan in near future
                 rollout_policy.append(copy.deepcopy(u))

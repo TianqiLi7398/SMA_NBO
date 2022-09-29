@@ -14,23 +14,40 @@ import numpy as np
 from utils.dec_agent_jpda import dec_agent_jpda
 import utils.util as util
 import psutil
-from mystic.solvers import diffev2
-from pathos.pools import ProcessPool
-from mystic.strategy import Rand1Bin
 import pyswarms as ps
-# from filterpy.kalman import JulierSigmaPoints
+from typing import List, Any
 
 
 class MCRollout(dec_agent_jpda):
-    def __init__(self, horizon, sensor_para_list, agentid, dt, cdt, opt_step = 1,
-            L0 = 5, isObsdyn=True, isRotate = False, gamma = 1.0, ftol = 5e-3, 
-            gtol = 7, cenVirtualWorld = False, isParallel = True, MCSnum = 50,
-            SemanticMap=None, OccupancyMap = None, sigma = False, distriRollout = True, nominal = False, 
-            factor = 5, penalty = 0, lite = False, central_kf = False, optmethod='de',
-            wtp=False, info_gain = False, IsStatic = False,):
-        # TODO v = 5 delete
+    def __init__(
+            self, 
+            horizon: int, 
+            sensor_para_list: dict, 
+            agentid: int, 
+            dt: float, 
+            cdt: float, 
+            opt_step: int = 1,
+            L0: int = 5, 
+            isObsdyn: bool=True, 
+            isRotate: bool = False, 
+            gamma: float = 1.0, 
+            ftol: float = 5e-3, 
+            gtol: float = 7, 
+            MCSnum: int = 50,
+            SemanticMap: Any=None, 
+            OccupancyMap: Any = None, 
+            distriRollout: bool = True, 
+            factor: float = 5, 
+            penalty: float = 0, 
+            central_kf: bool = True, 
+            optmethod: str ='pso',
+            wtp: bool = False,
+            info_gain: bool = False, 
+            IsStatic: bool = False,
+        ):
+        
         dec_agent_jpda.__init__(self, sensor_para_list, agentid, dt, cdt, L0 = L0, isObsdyn=isObsdyn, 
-            isRotate = isRotate, NoiseResistant =False, SemanticMap=SemanticMap, OccupancyMap=OccupancyMap, sigma = sigma)
+            isRotate = isRotate, NoiseResistant =False, SemanticMap=SemanticMap, OccupancyMap=OccupancyMap)
         
         self.sensor_num = len(sensor_para_list)
         self.horizon = horizon
@@ -42,7 +59,6 @@ class MCRollout(dec_agent_jpda):
         self.cdt = cdt
         self.factor = factor
         self.aimid = -1
-        self.cenVirtualWorld = cenVirtualWorld
         self.SampleDt = dt * self.factor
         if IsStatic:
             self.SampleF = np.matrix(np.eye(4))
@@ -61,14 +77,13 @@ class MCRollout(dec_agent_jpda):
             self.SampleQ = np.dot(np.dot(self.SampleA, np.diag([sigma_a**2, sigma_a**2])), self.SampleA.T)
         self.SampleNum = int(self.horizon / self.SampleDt)
         self.opt_step = opt_step
-        self.parallel = isParallel
         self.distriRollout = distriRollout
         self.policy_stack = []
         for _ in range(self.sensor_num):
             self.policy_stack.append([])
         self.v_bar_opt = sensor_para_list[agentid]["v"] * 0.2
         self.penalty = penalty
-        self.lite = lite
+
         self.central_kf = central_kf
         self.npop = 2*self.sensor_num * self.opt_step * 10
         self.optmethod = optmethod
@@ -80,7 +95,7 @@ class MCRollout(dec_agent_jpda):
         
         self.opt_value = -1                 # saves the output of optimization
     
-    def rollout(self, u):
+    def planning(self, u: List[List[float]]) -> List[List[float]]:
         
         # no track maintained   
         if len(self.local_track["id"]) < 1:
@@ -98,51 +113,7 @@ class MCRollout(dec_agent_jpda):
         self.sampling()
         
         if self.distriRollout:
-            if self.optmethod == 'de':
-                bounds = [(0, self.v_bar), (0, 2 * np.pi)]
-                
-                '''
-                details about the DE with parallel 
-                https://github.com/uqfoundation/mystic/blob/master/mystic/differential_evolution.py
-                '''
-                pool = ProcessPool(nodes=psutil.cpu_count()-1)
-                # stepmon = VerboseMonitor(interval=10, xinterval=10)
-                # result = diffev2(self.fobj, bounds, bounds = bounds, disp = True,itermon = stepmon,\
-                #     npop=20, map=pool.map, ftol=self.ftol, gtol=self.gtol, scale=.7, strategy=Rand1Bin)
-                # result = diffev2(self.f, bounds, npop=15, map=pool.map, disp = 0, itermon = stepmon)
-                # print("test")
-                # testv = [0.1, 0.1] * self.SampleNum
-                # self.fobj(testv)
-                # result = [0.1, 0.1] * self.SampleNum
-                # print("successful")
-                # print(self.u)
-
-                # TODO increase npop, initial guess input, termination condition
-                # if len(self.u[self.id]) > 0:
-                #     spherical = self.Eucildean_to_Spherical(self.u[self.id])
-
-                #     init_guess = spherical + spherical[-2:]
-                
-                #     assert len(init_guess) == 2 * self.SampleNum, "alert: " + str(self.u)
-                # else:
-                #     init_guess = bounds
-                
-                result = diffev2(self.fobj_de, bounds, bounds = bounds, disp = False, full_output = 1, \
-                    npop=40 * self.opt_step, map=pool.map, ftol=self.ftol, gtol= self.gtol, scale=.7, strategy=Rand1Bin)
-                    # npop=1, map=pool.map, ftol=self.ftol, gtol=self.gtol, scale=.8, strategy=Rand1Bin)
-                
-                if result[-1] == 1:
-                    print("Warning: Maximum number of function evaluations has "\
-                        "been exceeded.")
-                elif result[-1] == 2:
-                    print("Warning: Maximum number of iterations has been exceeded")
-                
-                x = [result[0][0], result[0][1]]
-                v = [x[0] * np.cos(x[1]), x[0] * np.sin(x[1])]
-                self.u[self.id] = v
-                self.v = v 
-                # print("opt ends===============================================")
-            elif self.optmethod == 'pso':
+            if self.optmethod == 'pso':
                 options = {'c1': 0.5, 'c2': 0.3, 'w':0.9}
                 # bound on riemannian
                 min_bound = [0, 0] 
@@ -154,7 +125,7 @@ class MCRollout(dec_agent_jpda):
         
                 # Perform optimization
                 cost, pos = optimizer.optimize(self.fobj_pso, n_processes=psutil.cpu_count()-1, iters=5000, verbose=False)
-                # print("t = %s, value = %s"%(self.t, cost))
+                
                 self.opt_value = cost
                 
                 x = [pos[0], pos[1]]
@@ -166,34 +137,8 @@ class MCRollout(dec_agent_jpda):
             else:
                 raise RuntimeError('optimization method undefined!')
         else:
-            # print("t = %s"%self.t)
-            if self.optmethod == 'de':
-                bounds = [(0, self.v_bar), (0, 2 * np.pi)] * (self.sensor_num * self.opt_step)
-                
-                pool = ProcessPool(nodes=psutil.cpu_count()-1)                
-                result = diffev2(self.fobj_de, x0=bounds, bounds = bounds, disp = False, full_output = 1,\
-                    npop= self.npop, map=pool.map, ftol=self.ftol, gtol= self.gtol, scale=.5, strategy=Rand1Bin)
-                
-                if result[-1] == 1:
-                    print("Warning: Maximum number of function evaluations has "\
-                        "been exceeded.")
-                elif result[-1] == 2:
-                    print("Warning: Maximum number of iterations has been exceeded")
-                else:
-                    pass
-
-                print("result value =%s"%result[1])
-                v_vector = []
-                for ids in range(self.sensor_num):
-                    
-                    v = result[0][2 * (ids * self.opt_step)]
-                    theta = result[0][2 * ids * self.opt_step + 1]
-                    action = [v*np.cos(theta), v*np.sin(theta)]
-                    v_vector.append(action)
-                self.u = v_vector
-                self.v = self.u[self.id]
-
-            elif self.optmethod == 'pso':
+            # centralized rollout
+            if self.optmethod == 'pso':
                 #  particle swarm optimization
                 # https://pyswarms.readthedocs.io/en/latest/examples/tutorials/basic_optimization.html#Basic-Optimization-with-Arguments
                 # source code
@@ -220,48 +165,24 @@ class MCRollout(dec_agent_jpda):
                 self.v = self.u[self.id]
             else:
                 raise RuntimeError('optimization method undefined!')
-                # print("optimization method undefined!")
+                
         return copy.deepcopy(self.u)
 
-    def fobj_de(self, u_i):
-        
-        if self.distriRollout:
-            u = copy.deepcopy(self.u)
-            x = [u_i[0], u_i[1]]    # why we need times 5 ????????, found Mar 1
-            v = [x[0] * np.cos(x[1]), x[0] * np.sin(x[1])]
-            u[self.id] = v
-            
-        else:
-            u = []
-            
-            for ids in range(self.sensor_num):
-                x = [u_i[2*ids], u_i[2 * ids + 1]]
-                v = [x[0] * np.cos(x[1]), x[0] * np.sin(x[1])]
-                u.append(v)
-                    
-        return self.f(u)
            
-    def fobj_pso(self, u_i):
-        length = len(u_i)
-
-        if self.distriRollout:
-            cost_list = []
-            for seed in range(length):
-                cost_list.append(self.fpso(u_i[seed, :]))
-               
-        else:
-            cost_list = []
-            for seed in range(length):
-                cost_list.append(self.fpso(u_i[seed, :]))
+    def fobj_pso(self, u_i: np.ndarray) -> np.array:
+        length = len(u_i)       
+        cost_list = []
+        for seed in range(length):
+            cost_list.append(self.fpso(u_i[seed, :]))
               
         return np.array(cost_list)
 
-    def fpso(self, u_i):
+    def fpso(self, u_i: List[float]) -> float:
         '''here u is an array'''
         if self.distriRollout:
             
             u = copy.deepcopy(self.u)
-            x = [u_i[0], u_i[1]]    # why we need times 5 ????????, found Mar 1
+            x = [u_i[0], u_i[1]]    
             v = [x[0] * np.cos(x[1]), x[0] * np.sin(x[1])]
             u[self.id] = v
         else:
@@ -273,135 +194,22 @@ class MCRollout(dec_agent_jpda):
                 u.append(v)
         return self.f(u)
 
-    def f(self, u):
+    def f(self, u: List[List[float]]) -> float:
         value = 0.0
 
         for trialnum in range(self.MCSnum):
             if self.central_kf:
                 value += self.rolloutTrialSim_centralized_P(u, trialnum)
             else:
+                # other ways for faster computation?
                 pass
         # minimal value
         value /= (len(self.local_track["id"]) * self.MCSnum)
-        # print("value of %s = %s"%(self.u[self.id][0], value))
-        
+                
         return value
     
-    def rolloutTrialSim_centralized(self, u, trialnum):
-        '''
-        ignore topology, focus on decentralized target tracking, applies
-        semantics map in target tracking
-        Objective value: average trace of P (average on every track, every time step)
-        '''
-        objValue = 0.0
-        tc = copy.deepcopy(self.t)
-        # 1. initiate all sensors
-        agent_list = []
-        
-        neighbor_num = len(self.neighbor["id"]) + 1
-        
-        for i in range(len(self.sensor_para_list)):
-            if i in self.neighbor["id"] or i==self.id:
-                
-                ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
-                        L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, isRotate = self.isRotate, 
-                        isVirtual = True, SemanticMap=self.SemanticMap)
-                
-                # skip data association, only have KF object
-                
-                for j in range(len(self.local_track["id"])):
-                    info = self.local_track["infos"][j][0]
-                    x0 = np.matrix(info.x).reshape(4,1)
-                    P0 = np.matrix(info.P).reshape(4,4)
-                    if self.isObsdyn:
-                        kf = util.dynamic_kf(self.SampleF, self.tracker.H, x0, P0, self.SampleQ, 
-                            self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
-                            self.sensor_para_list[i]["r"]]), self.sensor_para_list[i]["r0"], 
-                            quality=self.sensor_para_list[i]["quality"])
-                        kf.init = False
-                    else:
-                        kf = util.LinearKF(self.SampleF, self.tracker.H, x0, P0, self.SampleQ, 
-                            self.sensor_para_list[i]["quality"] * np.diag([self.sensor_para_list[i]["r"], 
-                            self.sensor_para_list[i]["r"]]))
-                    ego.tracker.append(kf)
-                ego.v = copy.deepcopy(u[i])                
-                ego.dynamics(self.SampleDt)
-                agent_list.append(ego)
-        # 2. simulate the Monte Carlo 
-        # broadcast information and recognize neighbors, we don't do it in every
-        # iteration since we assume they does not lose connection
 
-        for i in range(self.SampleNum):
-            t = self.t + (i + 1) * self.SampleDt
-            z_k = self.trajInTime_list[trialnum][i]
-            
-            # start using a sequential way to estimate KF
-            for j in range(len(z_k)):
-                z = z_k[j]
-                # pose = Point(z[0], z[1])
-                agent_list[0].tracker[j].predict()
-                if self.isInsideOcclusion(z):
-                    # get occluded, skip update
-                    agent_list[0].tracker[j].x_k_k = agent_list[0].tracker[j].x_k_k_min
-                    agent_list[0].tracker[j].P_k_k = agent_list[0].tracker[j].P_k_k_min
-                    agent_list[0].tracker[j].isUpdated = False
-                                        
-                else:
-                    # do sequential update
-                    agent_list[0].tracker[j].isUpdated = False
-                    for k in range(neighbor_num):
-                        if agent_list[k].isInFoV(z):
-                            agent_list[0].tracker[j].update(z, agent_list[k].sensor_para["position"], 
-                                    agent_list[k].sensor_para["quality"])
-                            agent_list[0].tracker[j].x_k_k_min = agent_list[0].tracker[j].x_k_k
-                            agent_list[0].tracker[j].P_k_k_min = agent_list[0].tracker[j].P_k_k
-                            agent_list[0].tracker[j].isUpdated = True        
-    
-            for l in range(len(z_k)):
-                # SigmaMatrix = np.matrix(track.Sigma).reshape(4, 4)
-                trace = np.trace(agent_list[0].tracker[l].P_k_k[0:2, 0:2])
-                                
-                objValue += trace # (self.gamma ** i) # * weight
-            
-            # 4. agent movement base policy
-            if np.isclose(t-tc, self.cdt) and (i <= self.SampleNum-2):
-                tc = t
-                for agent in agent_list:
-                    agent.base_policy()
-            for agent in agent_list:        
-                agent.dynamics(self.SampleDt)
-        
-        if self.wtp:
-            # multiple weighted trace penalty (MWTP) by [1]
-            wtp = 0.0
-            Dj = [0] * neighbor_num
-
-            for j in range(len(self.trajInTime_list[trialnum][-1])):
-                z = self.trajInTime_list[trialnum][-1][j]            
-                # pose = Point(z[0], z[1])
-                if self.isInsideOcclusion(z):
-                    continue
-                isoutside = True
-                for k in range(neighbor_num):
-                    isoutside = (not agent_list[k].isInFoV(z)) and isoutside
-                if isoutside:
-                    # find the minimium distrance from sensor to target
-                    distance = 10000
-                    index = 0
-                    for k in range(neighbor_num):
-                        d_k = self.euclidan_dist(z, agent_list[k].sensor_para["position"][0:2])
-                        if d_k < distance and Dj[k] == 0:
-                            index = k
-                            distance = d_k
-
-                    wtp += self.gamma * distance * np.trace(agent_list[0].tracker[j].P_k_k[0:2, 0:2])
-                    Dj[index] += 1
-            objValue += wtp
-            
-        return objValue
-
-
-    def rolloutTrialSim_centralized_P(self, u, trialnum):
+    def rolloutTrialSim_centralized_P(self, u: List[List[float]], trialnum: int) -> float:
         '''
         centralized kf update by information filter update on covariance
         '''
@@ -574,9 +382,6 @@ class MCRollout(dec_agent_jpda):
             for j in range(self.MCSnum):
                 trajectory = []
                 seed = samples[:, j]
-                # v = np.random.multivariate_normal(np.zeros(4), self.tracker.Q, 1)  
-                # seed = np.asarray(np.dot(self.tracker.F, samples[:, j]) + v)[0]
-                # trajectory.append(list(seed)[0:2])
                 for k in range(self.SampleNum):
                     # sample one place
                     v = np.random.multivariate_normal(np.zeros(4), self.SampleQ, 1)
@@ -596,5 +401,6 @@ class MCRollout(dec_agent_jpda):
                 trajInTime.append(self.column(trajectory, j))
             self.trajInTime_list.append(trajInTime)
     
-    def column(self, matrix, i):
+    def column(self, matrix: List[List[Any]], i: int) -> Any:
+        '''return the ith columns values in a list of list structure'''
         return [row[i] for row in matrix]

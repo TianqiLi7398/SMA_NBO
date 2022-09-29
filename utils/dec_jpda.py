@@ -37,7 +37,6 @@ class dec_jpda:
             t0: float = 0.0, 
             SemanticMap: Any = None, 
             OccupancyMap: Any = None, 
-            sigma: bool = False,
             IsStatic: bool = False
         ):
         self.id = agentid
@@ -55,10 +54,9 @@ class dec_jpda:
         self.info_msg = Info_sense()
         # self.local_track maintains all active tracks
         self.local_track = { "infos": [], "id": []}
-        # self.neighbor_track = {"infos": [], "id": []}
+        
         self.isObsdyn = isObsdyn_
         self.isVirtual = isVirtual
-        self.sigma = sigma
         if self.isVirtual:
             # the tracker is a list of KF objects
             self.tracker = []
@@ -70,8 +68,7 @@ class dec_jpda:
                     ConfirmationThreshold = self.sensor_para["ConfirmationThreshold"],
                     DeletionThreshold = self.sensor_para["DeletionThreshold"], 
                     t0=t0, IsStatic = IsStatic)
-                    # ConfirmationThreshold = [4, 5],
-                    # DeletionThreshold = [10, 12], t0=t0)
+                    
             else:
                 self.tracker = jpda_single(self.dt, self.sensor_para,
                     isSimulation = True, 
@@ -95,9 +92,7 @@ class dec_jpda:
                 for i in range(len(obstacle['feature']['x'])):
                     corners.append((obstacle['feature']['x'][i], obstacle['feature']['y'][i]))
                 self.Obstacles.append(Polygon(corners))
-        # elif self.useOccupancy:
-            # self.Occupancy = np.matrix(self.OccupancyMap['occupancy'])
-            # self.resolution = 0.1
+        
         
         self.w0 = .5
 
@@ -287,86 +282,6 @@ class dec_jpda:
         
         return z_list, w_list
 
-    def VirtualUpdate_sigma(self, z_k):
-        # Do KF update in the order of z_k
-        
-        if self.isObsdyn:
-            for i in range(len(z_k)):
-                self.tracker[i].predict()
-                z_list, w_list = self.sigma_obs(self.tracker[i].x_k_k_min, 
-                        self.tracker[i].P_k_k_min[0:2, 0:2])
-                w_in, w_out = 0.0, 0.0
-                for j in range(len(z_list)):
-                    z = z_list[j]
-                    
-                    if self.isInsideOcclusion([z[0], z[1]]) or (not self.isInFoV(z)):
-                        w_out += w_list[j]
-                    else:
-                        w_in += w_list[j]
-                if np.isclose(w_in, 0.0):
-                    # target in occlusion, skip kf update
-                    self.tracker[i].isUpdated = False
-                    self.tracker[i].x_k_k = self.tracker[i].x_k_k_min
-                    self.tracker[i].P_k_k = self.tracker[i].P_k_k_min
-                else:
-                    z = z_k[i]
-                    # if z is inside the fov, just update it
-                    self.tracker[i].update(z, self.sensor_para["position"], self.sensor_para["quality"])
-                    # fuse the covariance
-                    self.tracker[i].P_k_k = self.tracker[i].P_k_k * w_in + self.tracker[i].P_k_k_min * w_out
-
-        else:
-            for i in range(len(z_k)):
-                self.tracker[i].predict()
-                z_list, w_list = self.sigma_obs(self.tracker[i].x_k_k_min[0:2], 
-                        self.tracker[i].P_k_k_min[0:2, 0:2])
-                w_in, w_out = 0.0, 0.0
-                for j in range(len(z_list)):
-                    z = z_list[j]
-                    pose = Point(z[0], z[1])
-                    if self.isInsideOcclusion(pose) or (not self.isInFoV(z)):
-                        w_out += w_list[j]
-                    else:
-                        w_in += w_list[j]
-                if np.isclose(w_in, 0.0):
-                    # target in occlusion, skip kf update
-                    self.tracker[i].isUpdated = False
-                    self.tracker[i].x_k_k = self.tracker[i].x_k_k_min
-                    self.tracker[i].P_k_k = self.tracker[i].P_k_k_min
-                else:
-                    z = z_k[i]
-                    # if z is inside the fov, just update it
-                    self.tracker[i].update(z)
-                    # fuse the covariance
-                    self.tracker[i].P_k_k = self.tracker[i].P_k_k * w_in + self.tracker[i].P_k_k_min * w_out
-        
-        self.local_track = { "infos": [], "id": [], "incomes": []}
-        self.info_msg = Info_sense()
-        self.info_msg.id = self.id 
-        self.info_msg.l = 0
-        for i in range(len(self.tracker)):
-            track = self.tracker[i]
-            newtrack = Single_track()
-            newtrack.isObs = track.isUpdated
-            newtrack.track_id = i
-            x = track.x_k_k
-            P = track.P_k_k
-            Sigma = np.linalg.inv(P)
-            q = np.dot(Sigma, x)
-            newtrack.x = x.flatten().tolist()[0]
-            newtrack.q = q.flatten().tolist()[0]
-            newtrack.P = P.flatten().tolist()[0]
-            newtrack.Sigma = Sigma.flatten().tolist()[0]
-            # save it to the initial structure, in preparation of updating
-            self.info_msg.tracks.append(newtrack)
-            
-            self.local_track["infos"].append([newtrack])
-            self.local_track["id"].append(i)
-            #  self.local_track["incomes"].append(0)
-        
-        self.l = 1
-
-        return copy.deepcopy(self.info_msg)
 
     def euclidan_dist(self, p1: List[float], p2: List[float]) -> float:
         return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
@@ -383,10 +298,7 @@ class dec_jpda:
         size_k = []
         if self.isVirtual:
             # only KF updates without data association, happens in planning
-            if self.sigma:
-                return self.VirtualUpdate_sigma(z_k)
-            else:
-                return self.VirtualUpdate(z_k, semantic)
+            return self.VirtualUpdate(z_k, semantic)
 
         if self.isObsdyn:
             for i in range(len(z_k)):
