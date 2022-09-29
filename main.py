@@ -1,6 +1,8 @@
 
 import argparse
-from .utils import run_sim, analysis, visual
+import utils.run_sim as run_sim
+import utils.analysis as analysis
+import utils.visual as visual
 
 def args_def() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MTT simulation")

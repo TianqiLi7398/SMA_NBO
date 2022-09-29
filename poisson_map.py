@@ -1,4 +1,4 @@
-import numpy as np; #NumPy package for arrays, random number generation, etc
+import numpy as np
 import matplotlib.pyplot as plt #for plotting
 import os, json
 from utils.occupancy import occupancy
@@ -8,15 +8,6 @@ def generate_xy(a, b, x0, y0, lambda0, r):
  
 
     areaTotal= a*b
-    
-    #Point process parameters
-    # lambda0: intensity (ie mean density) of the Poisson process
-    
-    #Sim-ulate Poisson point process
-    numbPoints = np.random.poisson(lambda0*areaTotal);#Poisson number of points
-    # x_list = np.random.uniform(-0.5 * a + x0, 0.5 * a + x0, numbPoints); #angular coordinates 
-    # y_list = np.random.uniform(- 0.5 * b + y0, 0.5 * b + y0,numbPoints); #radial coordinates 
-
     # circles without overlaps
     x_list, y_list = sampling.circles_no_overlap(a, b, x0, y0, lambda0*areaTotal, r)
 
@@ -31,7 +22,7 @@ def main():
     canvas = [[-40, 100], [-20, 80]]
     x0, y0 = 0.5 * sum(canvas[0]), 0.5 * sum(canvas[1])
     a, b = canvas[0][1] - canvas[0][0], canvas[1][1] - canvas[1][0]
-    radius_pixel = int(radius/dx)
+    
 
     # load trajectories of targets
     filename = os.path.join(os.getcwd(), "data", 'env', "ParkingTraj2.json")
@@ -68,5 +59,6 @@ def main():
         for target in range(len(traj[0])):
             ax.plot(traj_occupancy[target][0], traj_occupancy[target][1])
         plt.savefig(os.path.join(os.getcwd(), 'pics', 'poisson_map', 'r_' + str(radius) + '_lambda_' + str(lambda0) + '_' + str(i) + '.png'))
+
 if __name__ == "__main__":
     main()
