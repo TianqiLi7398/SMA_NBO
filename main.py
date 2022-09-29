@@ -1,11 +1,6 @@
-import os
-from utils.simulator import simulator
-import time
-import json
-import utils.analysis
-import utils.mrs_analysis
+
 import argparse
-import run_sim, analysis
+from .utils import run_sim, analysis, visual
 
 def args_def() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MTT simulation")
@@ -101,15 +96,15 @@ def args_def() -> argparse.ArgumentParser:
 def main(args: argparse.Namespace):
     
 
-    if task == 'run':
+    if args.task == 'run':
         run_sim.run(args)
             
-    elif task == 'freq_analysis':
+    elif args.task == 'freq_analysis':
         analysis.freq_analysis(args)
-    elif task == 'time_series_ospa':
+    elif args.task == 'time_series_ospa':
         analysis.time_series_ospa(args)
-
-    
+    elif args.task == 'visualize':
+        visual.visualize(args)
     else:
         print("please indicate the task")
     
@@ -121,6 +116,5 @@ def main(args: argparse.Namespace):
 
            
 if __name__ == "__main__":
-    # test_email()
-    task = 'ospa_analysis'  # 'ospa_analysis', 'run', 'freq_analysis', 'time_series_ospa'
-    main(task)
+    args = args_def()
+    main(args)
