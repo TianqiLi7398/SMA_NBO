@@ -44,6 +44,8 @@ isParallel=True, IsDistriOpt=True,
 
 need to write this out
 
+ok, this is from dev repo
+
 ### 2. Visualization
 
 `$ python3 visual.py`
