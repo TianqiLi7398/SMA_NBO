@@ -42,6 +42,8 @@ isParallel=True, IsDistriOpt=False,
 isParallel=True, IsDistriOpt=True, 
 ```
 
+need to write this out
+
 ### 2. Visualization
 
 `$ python3 visual.py`
