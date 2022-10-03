@@ -12,7 +12,7 @@ from utils.dec_agent_jpda import dec_agent_jpda
 import utils.util as util
 import psutil
 import pyswarms as ps
-from typing import Any, List
+from typing import List, Union, Optional
 
 
 class nbo_agent(dec_agent_jpda):
@@ -34,9 +34,9 @@ class nbo_agent(dec_agent_jpda):
             gamma: float = 1.0, 
             ftol: float = 5e-3, 
             gtol: float = 7, 
-            SemanticMap: Any=None, 
+            SemanticMap: Optional[dict]=None, 
             IsDistriOpt: bool = True, 
-            OccupancyMap: bool=None, 
+            OccupancyMap: Optional[dict]=None, 
             IsStatic:bool = False,
             factor: float = 5, 
             penalty: float = 0, 
@@ -102,12 +102,12 @@ class nbo_agent(dec_agent_jpda):
         self.opt_value = -1                 # saves the output of optimization
     
     
-    def planning(self) -> List[List[float]]:
+    def planning(self) -> Union[List[List[float]], List[List[List[float]]]]:
         '''Parallel decision making in NBO, 
         the distributed case: SMA or PMA, 
         and centralized case: central or dec-POMDP'''
         self.sampling()
-
+        
         # no track maintained   
         if len(self.local_track["id"]) < 1:
             print("no observation for agent %d"%self.id)
@@ -127,19 +127,6 @@ class nbo_agent(dec_agent_jpda):
                         dimensions=2* self.opt_step, options=options, ftol=self.ftol, \
                         bounds=bounds, ftol_iter = self.gtol)
                 
-                # bound on riemannian
-                try:
-                    optimizer = ps.single.GlobalBestPSO(n_particles= 20 * self.opt_step, \
-                        dimensions=2* self.opt_step, options=options, ftol=self.ftol, \
-                        bounds=bounds, ftol_iter = self.gtol) # , init_pos = init_pos)
-
-                except:
-                    print("init fails at time %s"%self.t)
-                    # Call instance of PSO
-                    optimizer = ps.single.GlobalBestPSO(n_particles = self.npop, 
-                        dimensions=2*self.sensor_num * self.opt_step, 
-                        options=options, ftol=self.ftol, bounds=bounds,  
-                        ftol_iter = self.gtol)
 
                 # Perform optimization
                 cost, pos = optimizer.optimize(self.fobj_pso, \
@@ -170,20 +157,6 @@ class nbo_agent(dec_agent_jpda):
                         options=options, ftol=self.ftol, bounds=bounds, \
                         ftol_iter = self.gtol)
                 
-                # bound on riemannian
-                try:
-                    
-                    optimizer = ps.single.GlobalBestPSO(n_particles= 20 * self.opt_step, \
-                        dimensions=2 * self.sensor_num* self.opt_step, \
-                        options=options, ftol=self.ftol, bounds=bounds, ftol_iter = self.gtol) 
-
-                except:
-                    print("init fails at time %s"%self.t)
-                    # Call instance of PSO
-                    optimizer = ps.single.GlobalBestPSO(n_particles= self.npop, \
-                        dimensions=2 * self.sensor_num * self.opt_step, \
-                        options=options, ftol=self.ftol, bounds=bounds, \
-                        ftol_iter = self.gtol)
                 # Perform optimization
                 cost, pos = optimizer.optimize(self.fobj_pso, n_processes=psutil.cpu_count()-1,\
                     iters=5000, verbose=False)
@@ -191,14 +164,16 @@ class nbo_agent(dec_agent_jpda):
                 
                 action_vector = []
                 
-                for i in range(self.opt_step):
+                for ids in range(self.sensor_num):
+                    agent_vector = []
+                    for i in range(self.opt_step):
 
-                    v = pos[2 * (self.id * self.opt_step + i)]
-                    theta = pos[2 * (self.id * self.opt_step + i) + 1]
-                    action = [v*np.cos(theta), v*np.sin(theta)]
-                    action_vector.append(action)
-                
-                self.v = action_vector[0]
+                        v = pos[2 * (ids * self.opt_step + i)]
+                        theta = pos[2 * (ids * self.opt_step + i) + 1]
+                        action = [v*np.cos(theta), v*np.sin(theta)]
+                        # action = [pos[2 * (ids * self.opt_step + i)], pos[2 * (ids * self.opt_step + i) + 1]]
+                        agent_vector.append(action)
+                    action_vector.append(copy.deepcopy(agent_vector))
                         
             else:
                 raise RuntimeError('optimization method undefined!')
@@ -300,7 +275,7 @@ class nbo_agent(dec_agent_jpda):
             if i in self.neighbor["id"] or i==self.id:
                 
                 ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
-                        L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, isRotate = self.isRotate, 
+                        L0 = self.L, isObsdyn = self.tracker.isObsdyn, isRotate = self.isRotate, 
                         isVirtual = True, SemanticMap=self.SemanticMap)
                 
                 # skip data association, only have KF object
@@ -453,7 +428,7 @@ class nbo_agent(dec_agent_jpda):
             if i in self.neighbor["id"] or i==self.id:
                 
                 ego = dec_agent_jpda(copy.deepcopy(self.sensor_para_list), i, self.SampleDt, self.cdt, 
-                        L0 = self.L, isObsdyn__ = self.tracker.isObsdyn, isRotate = self.isRotate, 
+                        L0 = self.L, isObsdyn = self.tracker.isObsdyn, isRotate = self.isRotate, 
                         isVirtual = True, SemanticMap=self.SemanticMap)
                 
                 # skip data association, only have KF object

@@ -15,7 +15,7 @@ from utils.dec_agent_jpda import dec_agent_jpda
 import utils.util as util
 import psutil
 import pyswarms as ps
-from typing import List, Any
+from typing import List, Any, Optional, Union
 
 
 class MCRollout(dec_agent_jpda):
@@ -34,8 +34,8 @@ class MCRollout(dec_agent_jpda):
             ftol: float = 5e-3, 
             gtol: float = 7, 
             MCSnum: int = 50,
-            SemanticMap: Any=None, 
-            OccupancyMap: Any = None, 
+            SemanticMap: Optional[dict]=None, 
+            OccupancyMap: Optional[dict] = None, 
             distriRollout: bool = True, 
             factor: float = 5, 
             penalty: float = 0, 
@@ -95,7 +95,7 @@ class MCRollout(dec_agent_jpda):
         
         self.opt_value = -1                 # saves the output of optimization
     
-    def planning(self, u: List[List[float]]) -> List[List[float]]:
+    def planning(self, u: List[List[float]]) -> Union[List[List[float]], List[List[List[float]]]]:
         
         # no track maintained   
         if len(self.local_track["id"]) < 1:

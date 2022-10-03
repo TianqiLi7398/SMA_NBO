@@ -4,7 +4,7 @@ import os
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
-# plt.rcParams['animation.ffmpeg_path'] = '/usr/bin/ffmpeg'
+plt.rcParams['animation.ffmpeg_path'] = '/usr/bin/ffmpeg'
 # plt.rcParams['animation.ffmpeg_path'] = '/opt/local/bin/ffmpeg'
 
 import matplotlib.animation as animation
@@ -96,7 +96,7 @@ def replay_poisson(horizon, lambda0, r, iter_num, env, domain, wtp, central_kf=F
             record = json.load(json_file)
         record["policy"].pop(0)
         step_num = len(record["agent_est"][0])
-        assert np.isclose(step_num, len(traj[0][0]))
+        # assert np.isclose(step_num, len(traj[0][0]))
         sensor_para_list = data["sensors"]
         dt = data["dt"]
         # consensus parameters:
@@ -232,6 +232,8 @@ def replay_poisson(horizon, lambda0, r, iter_num, env, domain, wtp, central_kf=F
             pass
         
         filename = os.path.join(videopath, data2save + "_"+str(iteration)+'.mp4')
+        if not os.path.exists(videopath):
+            os.makedirs(videopath)
         if repeated > 0:
             filename = os.path.join(videopath, data2save + "_0_"+str(iteration)+'.mp4')
         ani.save(filename, fps=5)
@@ -246,4 +248,4 @@ def visualize(args: argparse.Namespace, seq = 0):
         central_kf=args.ckf, seq=seq, 
         optmethod=args.optmethod, ftol=args.ftol, gtol=args.gtol, traj_type = args.traj_type, 
         info_gain = args.info_gain, deci_Schema=args.deci_Schema,
-        repeated=args.repeat_time)
+        repeated=args.repeated_times)

@@ -6,7 +6,7 @@ def run(args: argparse.Namespace):
 
     horizon_list, lambda0_list, r_list = [], [], []
     
-    horizon_list = args.horizons if args.horizons else [args.horizon]
+    horizon_list = args.horizon_list if args.horizon_list else [args.horizon]
     r_list = args.r_list if args.r_list else [args.r]
     lambda0_list = args.lambda0_list if args.lambda0_list else [args.lambda0]
 
@@ -36,7 +36,6 @@ def run_trials(
                     optmethod=args.optmethod, lambda0 = lambda0, r = r, traj_type = args.traj_type, coverfile = False, 
                     info_gain = args.info_gain, repeated = args.repeated)
             
-            
         elif args.deci_Schema == 'sma':
             
             simulator.SMA_NBO(args.iteration, horizon, args.ftol, args.gtol, args.wtp, args.case, args.useSemantic, central_kf=args.ckf, 
@@ -52,6 +51,10 @@ def run_trials(
             else: raise RuntimeError("optmethod can only be pso so far")
         elif args.deci_Schema == 'decPOMDP':
             simulator.decPOMDP_NBO(args.iteration, horizon, args.ftol, args.gtol, args.wtp, args.case, args.useSemantic, central_kf=args.ckf, 
+                    optmethod=args.optmethod, lambda0 = lambda0, r = r, traj_type = args.traj_type, coverfile = True, 
+                    info_gain = args.info_gain, repeated = args.repeated)
+        elif args.deci_Schema == 'test':
+            simulator.test_NBO(args.iteration, horizon, args.ftol, args.gtol, args.wtp, args.case, args.useSemantic, central_kf=args.ckf, 
                     optmethod=args.optmethod, lambda0 = lambda0, r = r, traj_type = args.traj_type, coverfile = True, 
                     info_gain = args.info_gain, repeated = args.repeated)
         else:

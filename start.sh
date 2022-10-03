@@ -1,9 +1,9 @@
 
 python3 main.py\
-    --task=run_trials\
+    --task=visualize\
     --horizon=5\
-    --deci-Schema=sma\
-    --case=poission\
+    --deci-Schema=test\
+    --case=poisson\
     --useSemantic=True\
     --lambda0=5e-3\
     --r=5\
@@ -16,4 +16,10 @@ python3 main.py\
     --ftol=5e-4\
     --gtol=50\
     --optmethod=pso\
-    --opt-step=1
+    --opt-step=1\
+    --horizon-list=5\
+    --deci-Schema-list='test'\
+    --lambda0-list=0.005\
+    --r-list=5\
+    --iteration=$1\
+    --repeated-times=1

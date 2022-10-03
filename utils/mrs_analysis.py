@@ -77,7 +77,8 @@ def error_frequency(
         agentid: int, 
         batch_num: int, 
         c: float =10.0, 
-        p: float=2
+        p: float=2,
+        start_index: int=10
     ):
     '''
     ospa value of different maps without repeatition
@@ -93,15 +94,14 @@ def error_frequency(
         total_error = []
         total_missing = []
         
-        print(dataPath)
         times = 0
         for i in range(batch_num):
             error, missing_cases, dt = get_all_error(date2run, agentid, dataPath, \
-                                        i, c=c, p=p, traj_type = para["traj_type"])
+                                        i, c=c, p=p, traj_type = para["traj_type"], \
+                                        start_index=start_index)
             times += dt
             total_error += error
             total_missing += missing_cases
-        
         print("average time = %s" % (times/batch_num))
         
         dx = 0.05
@@ -110,7 +110,7 @@ def error_frequency(
         x = np.linspace(dx, c, num)  
         cdf = np.cumsum(res.frequency)
         
-        ax.plot(x, cdf, label = 'H = %s, dv = %s'%(para["horizon"], para["dv"]))
+        ax.plot(x, cdf, label = 'H = %s'%(para["horizon"]))
         
         item_name = iscen + '_' + para["domain"] + '_' + str(para["lambda0"]) + '_'\
              + str(para["r"]) + '_' + str(para["horizon"]) + '_wtp_' + str(para["wtp"])
@@ -122,7 +122,7 @@ def error_frequency(
     csv_freq_name, csv_mean_name, figname = filenames(iscen, para)
     # save data to csv
     df = pd.DataFrame(data2csv)
-    df.to_csv(csv_freq_name,sep='\t')
+    df.to_csv(csv_freq_name, sep='\t')
     df_mean = pd.DataFrame(mean2csv)
     df_mean.to_csv(csv_mean_name,sep='\t')
 
@@ -142,36 +142,29 @@ def filenames(
     ) -> Tuple[str, str, str]:
 
     '''generate filenames for statistical data'''
+    path = os.path.join(path)
+    if not os.path.exists(path):
+        os.makedirs(path)
 
     if para["env"] == 'poisson':
-        csv_freq_name = os.path.join(os.getcwd(), 'pics', 'analysis', \
+        csv_freq_name = os.path.join(path, \
             "frequency_analysis_%s_%s_wtp_%s_r_%s_%s_info_%s.csv" % \
             (iscen, para["domain"], para["wtp"], para["r"], para["traj_type"], para["info_gain"]))
-        csv_mean_name = os.path.join(os.getcwd(), 'pics', 'analysis',\
+        csv_mean_name = os.path.join(path, \
             "mean_analysis_%s_%s_wtp_%s_r_%s_%s_info_%s.csv" % \
             (iscen, para["domain"], para["wtp"], para["r"], para["traj_type"], para["info_gain"]))
-        figname = os.path.join(os.getcwd(), 'pics', 'analysis',\
+        figname = os.path.join(path,\
             "frequency_analysis_%s_%s_wtp_%s_r_%s_%s_info_%s.png" % \
             (iscen, para["domain"], para["wtp"], para["r"], para["traj_type"], para["info_gain"]))
     elif para["env"] == 'parksim':
-        if para['optmethod'] == 'discrete':
-            csv_freq_name = os.path.join(os.getcwd(), 'pics', 'analysis',\
-                "frequency_analysis_parksim_%s_h_%s_%s_%s_%s.csv" % \
-                (iscen, para['horizon'], para['optmethod'], para["info_gain"], para["dv"]))
-            csv_mean_name = os.path.join(os.getcwd(), 'pics', 'analysis',\
-                "mean_analysis_parksim_%s_h_%s_%s_%s_%s.csv" % \
-                (iscen, para['horizon'], para['optmethod'], para["info_gain"], para["dv"]))            
-            figname = os.path.join(os.getcwd(), 'pics', 'analysis',\
-                "frequency_analysis_%s_h_%s_%s_%s_%s.png" % \
-                (iscen, para['horizon'], para['optmethod'], para["info_gain"], para["dv"]))
-        elif para['optmethod'] == 'pso':
-            csv_freq_name = os.path.join(os.getcwd(), 'pics', 'analysis', \
+        if para['optmethod'] == 'pso':
+            csv_freq_name = os.path.join(path, \
                 "frequency_analysis_parksim_%s_h_%s_%s_%s.csv" % \
                 (iscen, para['horizon'], para['optmethod'], para["info_gain"]))
-            csv_mean_name = os.path.join(os.getcwd(), 'pics', 'analysis', \
+            csv_mean_name = os.path.join(path, \
                 "mean_analysis_parksim_%s_h_%s_%s_%s.csv" % \
                 (iscen, para['horizon'], para['optmethod'], para["info_gain"]))            
-            figname = os.path.join(os.getcwd(), 'pics', 'analysis', \
+            figname = os.path.join(path, \
                 "frequency_analysis_%s_h_%s_%s_%s.png" % \
                 (iscen, para['horizon'], para['optmethod'], para["info_gain"]))
     return csv_freq_name, csv_mean_name, figname
@@ -191,7 +184,6 @@ def time_series_analysis(
     from mpl_axes_aligner import align
     # usage https://matplotlib-axes-aligner.readthedocs.io/en/latest/align_usage.html
 
-    start_index = 5
     ax = fig.add_subplot(1, 1, 1)
 
     ax2 = ax.twinx()
@@ -207,12 +199,13 @@ def time_series_analysis(
         for i in range(repeated_time):
             
             error, missing_cases,_ = get_all_error(date2run, agentid, dataPath, 0, \
-                    c=c, p=p, traj_type = para["traj_type"], repeated=i, start_index=start_index)
+                            c=c, p=p, traj_type = para["traj_type"], repeated=i, \
+                            start_index=start_index)
             
             dist_list.append(error)
-            # print(missing_cases)
+            
             total_missing.append(missing_cases)
-        # print(max(total_error))
+
         mean_list = []
         conf_inter = []
         miss_list  = []
@@ -240,7 +233,10 @@ def time_series_analysis(
     ax.set_ylabel('OSPA/m')
     ax2.set_ylabel('Track difference', color='b')
     align.yaxes(ax, 0, ax2, 0, 0.05)
-    figname = os.path.join(os.getcwd(), 'pics', 'time_series_analysis', \
+    path = os.path.join(os.getcwd(), 'pics', 'time_series_analysis')
+    if not os.path.exists(path):
+        os.makedirs(path)
+    figname = os.path.join(path, \
             "time_analysis_r=%s_lambda=%s_horizon_%s.png" % \
             (para["r"], para["lambda0"], para["horizon"]))
     plt.savefig(figname)
@@ -252,7 +248,7 @@ def filename(para: dict, seq: int =0, ckf: bool =True) -> Tuple[str, str]:
             para["wtp"], para["env"], seq, ckf, para["optmethod"], para["deci_Schema"], \
             para["domain"], lambda0 = para["lambda0"], r= para["r"], \
             MCSnum = para["MCSnum"], traj_type = para["traj_type"], info_gain=para["info_gain"], \
-            dropout_pattern=para["dropout_pattern"], dropout_prob=para["dropout_prob"], dv = para['dv'])
+            )
     
     dataPath = os.path.join(os.getcwd(), 'data', 'result', para["domain"], para["env"], data2save)
     return data2save, dataPath

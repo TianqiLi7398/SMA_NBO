@@ -15,9 +15,7 @@ def args_def() -> argparse.ArgumentParser:
         help="Horizon steps in non-myopic planning")
     parser.add_argument("--deci-Schema", type=str, default='sma', 
         help="Multi-agent decision schema in [cen, sma, decPOMDP]")
-    parser.add_argument("--repeat-time", type=int, default=1,
-        help="Times of repeatition over same map")
-
+    
     # simulation map parameter
     parser.add_argument("--case", type=str, default='poission', 
         help="the map type in simulation")
@@ -27,7 +25,7 @@ def args_def() -> argparse.ArgumentParser:
     
     parser.add_argument("--lambda0", type=float, default=5e-3,
         help="the density of occlusions, unit in num/m^2")
-    parser.add_argument("--r", type=float, default=5.0,
+    parser.add_argument("--r", type=int, default=5,
         help="radius of the occlusion, unit in m")
     
     # trajectory type
@@ -66,7 +64,7 @@ def args_def() -> argparse.ArgumentParser:
     parser.add_argument("--lambda0-list", nargs='+', type=float,
         help="list of lambda0 if want to run simulation in multiple maps")
     
-    parser.add_argument("--r-list", nargs='+', type=float,
+    parser.add_argument("--r-list", nargs='+', type=int,
         help="list of r if want to run simulation in multiple maps")
     
     parser.add_argument("--horizon-list", nargs='+', type=int,
@@ -85,7 +83,7 @@ def args_def() -> argparse.ArgumentParser:
     
     # arguments for analysis
     
-    parser.add_argument("--deci-Schema-list", type=float, 
+    parser.add_argument("--deci-Schema-list", nargs='+', type=str, 
         help="different deci-Schema to check")
     
     parser.add_argument("--repeated-times", type=int, default=1,
@@ -119,4 +117,5 @@ def main(args: argparse.Namespace):
            
 if __name__ == "__main__":
     args = args_def()
+    print(args)
     main(args)

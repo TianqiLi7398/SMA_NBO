@@ -12,6 +12,12 @@ from pathlib import Path
 import itertools
 from typing import Any, List, Tuple
 
+global test_step_num, xs, covs
+
+xs = [[27.5, -1.5], [42.5, 7.5], [4.5, 31.5], [10, 60]]
+covs = [0.5, 1.5, .5, .5]
+test_step_num = 6
+
 class simulator:
 
     @staticmethod
@@ -560,7 +566,7 @@ class simulator:
 
         if not os.path.exists(dataPath):
             os.makedirs(dataPath)
-        # if file exists, means we don't need to do it
+        
         if repeated > 0:
 
             filename = os.path.join(dataPath, data2save + "_" + str(iteration)+ "_" + str(repeated) + ".json")
@@ -680,7 +686,7 @@ class simulator:
             
 
             # 2. consensus starts
-            for l in range(N):
+            for _ in range(N):
                 # receive all infos
                 for agent in agent_list:
                     agent.grab_info_list(info_list)
@@ -1394,6 +1400,202 @@ class simulator:
         with open(filename, 'w') as outfiles:
             json.dump(output_data, outfiles, indent=4)
     
-    
+    @staticmethod
+    def test_NBO(iteration, horizon, ftol, gtol, wtp, env, useSemantic, info_gain = False, central_kf=False, seq=0, 
+        optmethod='pso', lambda0 = 1e-3, r = 5, coverfile = False, traj_type = 'normal', repeated = -1):
+        start_time = time.time()
+        '''centralized optimization of NBO'''
+        isObsDyn = True
+        isRotate = False
+        
+        data2save = simulator.filename_generator(horizon, ftol, gtol, wtp, env, seq, central_kf, optmethod, 
+            'test', 'nbo', lambda0 = lambda0, r=r, traj_type = traj_type, info_gain = info_gain, useSemantic = useSemantic,
+            )
+        
+        path = os.getcwd()
+        dataPath = os.path.join(path, 'data', 'result', 'nbo', env, data2save)
+
+        if not os.path.exists(dataPath):
+            os.makedirs(dataPath)
+        # if file exists, means we don't need to do it
+        if repeated > 0:
+
+            filename = os.path.join(dataPath, data2save + "_" + str(iteration)+ "_" + str(repeated) + ".json")
+        else:  filename = os.path.join(dataPath, data2save + "_" + str(iteration) + ".json")
+        if not coverfile:
+            my_file = Path(filename)
+            if my_file.is_file():
+                print("%s already exists!" % filename)
+                return
+
+        # env parameter and traj parameter
+        data, traj, SemanticMap, CircleMap = simulator.map_traj_doc(env, traj_type, useSemantic, r, lambda0, iteration)
+
+        agent_seq = data["seq"][str(seq)]
+        sensor_para_list = [data["sensors"][i-1] for i in agent_seq]
+        dt = data["dt"]
+        # consensus parameters:
+        N = 5   #consensus steps
+        # control parameters:
+        cdt = data["control_dt"]
+        step_num = test_step_num
+        time_set = np.linspace(dt, dt * step_num, step_num)
+        # 1. initialization of nodes
+        
+        agent_list = []
+        for i in range(len(sensor_para_list)):
+            if env in ['parksim', 'simple1', 'simple2']:
+                
+                ego = nbo_agent(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
+                    L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
+                    SemanticMap=SemanticMap,  IsDistriOpt=False, 
+                    central_kf=central_kf, optmethod=optmethod, factor=5, wtp=wtp, info_gain = info_gain,
+                    IsStatic = (traj_type == 'static'))
+            elif env == 'poisson':
+                
+                ego = nbo_agent(horizon, copy.deepcopy(sensor_para_list), i, dt, cdt,
+                    L0 = N, isObsdyn = isObsDyn, isRotate = isRotate, ftol=ftol, gtol=gtol, 
+                    OccupancyMap=CircleMap,  IsDistriOpt=False, 
+                    central_kf=central_kf, optmethod=optmethod, factor=5, wtp=wtp, info_gain = info_gain,
+                    IsStatic = (traj_type == 'static'))
+            else: raise RuntimeError('No clear env defined as %s' % env)
+
+            if traj_type == 'static':
+                # add init target value to all agents
+                for j in range(len(xs)):
+                    
+                    x0 = np.matrix(xs[j] + [0, 0]).reshape(4,1)
+                    P0 = np.matrix(np.diag([covs[j]**2] * 4))
+                    kf = util.dynamic_kf(np.eye(4), ego.tracker.H, x0, P0, np.zeros((4, 4)), 
+                            ego.sensor_para_list[ego.id]["quality"] * np.diag([ego.sensor_para_list[ego.id]["r"], 
+                            ego.sensor_para_list[ego.id]["r"]]), ego.sensor_para_list[ego.id]["r0"], 
+                            quality= ego.sensor_para_list[ego.id]["quality"])
+                    kf.init = False
+                    
+                    new_track = util.track(0, j, kf, ego.tracker.DeletionThreshold, ego.tracker.ConfirmationThreshold)
+                    new_track.kf.predict()
+                    new_track.bb_box_size = []
+                    new_track.confirmed = True
+                    ego.tracker.track_list.append(new_track)
+                    ego.tracker.track_list_next_index.append(j)
+            agent_list.append(ego)
+            
+        # 2. consensus IF
+        true_target_set = []    
+        
+        agent_est = []
+        rollout_policy = [[[0,0], [0,0], [0,0]]]
+        for i in range(len(sensor_para_list)):
+            agent_est.append([])
+            
+        obs_set = []
+        con_agent_pos = []
+        info_value = []
+        
+        # last time control happened
+        tc = 0.0
+
+        for i in range(step_num):
+            t = i * dt
+            # broadcast information and recognize neighbors
+            pub_basic = []
+            for agent in agent_list:
+                basic_msg = Agent_basic()
+                basic_msg.id = agent.id
+                basic_msg.x = agent.sensor_para["position"][0]
+                basic_msg.y = agent.sensor_para["position"][1]
+                basic_msg.theta = agent.sensor_para["position"][2]
+                pub_basic.append(basic_msg)
+            
+            # make each agent realize their neighbors
+            for agent in agent_list:
+                agent.basic_info(pub_basic)
+            
+            z_k = []
+            for ii in range(len(traj[0])):
+                z_k.append([traj[0][ii][i], traj[1][ii][i]])
+            obs_k = []
+            info_list = []
+            
+            # 1. feed info to sensors
+            for agent in agent_list:
+                info_0, z_k_out, _ = agent.sim_detection_callback(copy.deepcopy(z_k), t)
+                info_list.append(info_0)                
+                obs_k += z_k_out
+                
+            obs_set.append(obs_k)
+            
+            # 2. consensus starts
+            for _ in range(N):
+                # receive all infos
+                for agent in agent_list:
+                    agent.grab_info_list(info_list)
+                
+                info_list = []
+                # then do consensus for each agent, generate new info
+                for agent in agent_list:
+                    info_list.append(agent.consensus())
+
+            # 3. after fixed num of average consensus, save result in menory
+            for i in range(len(sensor_para_list)):
+
+                agent_i_est_k = []
+                
+                for track in info_list[i].tracks:
+                    x = track.x[0]
+                    y = track.x[1]
+                    vx = track.x[2]
+                    vy = track.x[3]
+                    P = track.P
+                    agent_i_est_k.append([x, y, vx, vy, P])
+                    
+                agent_est[i].append(agent_i_est_k)
+                
+            # 4. agent movement 
+            
+            agent_pos_k = []
+            
+            if (np.isclose(t - tc - cdt, 0) or t-tc >= cdt) and not np.isclose(t, time_set[-1]):
+                
+                # decision making step
+                
+                u = agent_list[0].planning()
+                print(u)
+                # broadcast this final u to all agents
+                for agent, action_horizon in zip(agent_list, u):
+                    
+                    agent.v = copy.deepcopy(action_horizon[0])
+
+                # record all actions to generate the plan in near future
+                rollout_policy.append(copy.deepcopy(u))
+                info_value.append(agent_list[0].opt_value)
+            # update position given policy u
+            for i in range(len(agent_list)):
+                
+                agent = agent_list[i]                
+                agent.dynamics(dt)
+                sensor_para_list[i]["position"] = copy.deepcopy(agent.sensor_para["position"])
+                agent_pos_k.append(agent.sensor_para["position"])
+            
+            con_agent_pos.append(copy.deepcopy(agent_pos_k))
+
+            if (np.isclose(t - tc - cdt, 0) or t-tc >= cdt) and not np.isclose(t, time_set[-1]):
+                tc = t
+                output_data = {
+                    "true_target": true_target_set,
+                    "agent_est": agent_est,
+                    "agent_pos": con_agent_pos,
+                    "agent_obs": obs_set,
+                    "policy": rollout_policy,
+                    "info_value": info_value
+                }
+        
+        end_time = time.time()
+        output_data["time"] = end_time - start_time
+        # save file
+        with open(filename, 'w') as outfiles:
+            json.dump(output_data, outfiles, indent=4)
+
+
     
     

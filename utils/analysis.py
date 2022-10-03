@@ -9,7 +9,7 @@ def freq_analysis(args: argparse.Namespace, agentid: int = 0):
     once (by indexing args.iteration, and args.repeated_num = 0)
     '''
 
-    print("sim number is %s, deci_Schema = %s" % (argparse.iteration, argparse.deci_Schema))
+    print("sim number is %s, deci_Schema = %s" % (args.iteration, args.deci_Schema))
     
     horizon_list = args.horizon_list
     lambda0_list = args.lambda0_list
@@ -37,10 +37,12 @@ def freq_analysis(args: argparse.Namespace, agentid: int = 0):
                 }
             paralist.append(ele)
     
-    utils.mrs_analysis.error_frequency(paralist, agentid, args.iteration, c=50.0, p=2)
+    utils.mrs_analysis.error_frequency(paralist, agentid, args.iteration, c=50.0, \
+            p=2, start_index = 0 if args.deci_Schema == 'test' else 10)
 
 def time_series_ospa(args: argparse.Namespace, agentid: int = 0):
-    print("sim number is %s, deci_Schema = %s" % (argparse.repeated_times, argparse.deci_Schema))
+    
+    print("sim number is %s, deci_Schema = %s" % (args.repeated_times, args.deci_Schema))
     
     """ 
     plot the OSPA mean and error bar over the time with repeated_time for a list of algs
@@ -76,7 +78,8 @@ def time_series_ospa(args: argparse.Namespace, agentid: int = 0):
                     }
                 paralist.append(ele)
                 utils.mrs_analysis.time_series_analysis(paralist, \
-                    agentid, args.repeated_times, c=50.0, p=2)
+                    agentid, args.repeated_times, c=50.0, p=2,
+                    start_index = 0 if args.deci_Schema == 'test' else 10)
 
 
 

@@ -175,7 +175,33 @@ class dec_jpda:
 
     def isInFoV(self, z: List[float]) -> bool:
         # give z = [x, y], check if it's inside FoV
-        return self.tracker.isInFoV(z)
+        # return self.tracker.isInFoV(z)
+        if self.sensor_para["shape"][0] == "circle":
+            r = self.sensor_para["shape"][1]
+            center = self.sensor_para["position"]
+            distance = np.sqrt((center[0] - z[0])**2 + (center[1] - z[1])**2)
+            if distance > r:
+                return False
+            else:
+                return True
+        elif self.sensor_para["shape"][0] == "rectangle":
+            # analysis the shape of rectangle
+            width = self.sensor_para["shape"][1][0]
+            height = self.sensor_para["shape"][1][1]
+            angle = self.sensor_para["position"][2]
+            center = self.sensor_para["position"][0:2]
+    
+            dx = z[0] - center[0]
+            dy = z[1] - center[1]
+            dx_trans = dx * np.cos(angle) + dy * np.sin(angle)
+            dy_trans = - dx * np.sin(angle) + dy * np.cos(angle)
+            
+            if 2 * abs(dx_trans) <= width and 2 * abs(dy_trans) <= height:
+                return True
+            else:
+                return False
+        else:
+            return False
 
     def VirtualUpdate(self, 
             z_k: List[float], 

@@ -16,7 +16,7 @@ Properities:
 
 import numpy as np
 from utils.dec_jpda import dec_jpda
-from typing import Any
+from typing import Optional
 
 class dec_agent_jpda(dec_jpda):
     '''
@@ -35,8 +35,8 @@ class dec_agent_jpda(dec_jpda):
             IsStatic: bool = False,
             isVirtual: bool = False,
             t0: float = 0, 
-            SemanticMap: Any =None, 
-            OccupancyMap: Any =None, 
+            SemanticMap: Optional[dict] =None, 
+            OccupancyMap: Optional[dict] =None, 
         ):
         dec_jpda.__init__(self, sensor_para_list, agentid, dt, L = L0, 
             isObsdyn_=isObsdyn, NoiseResistant =NoiseResistant, 
