@@ -8,7 +8,6 @@ class Single_track:
         # float64[4] 
         self.x = []
 
-
         # information vector, which is q = Sigma*x
         # float64[4] 
         self.q = []
@@ -40,6 +39,9 @@ class Info_sense:
 
         # Single_track[] 
         self.tracks = []
+
+        # occlusion_info
+        self.occlusions = []
     
     def __str__(self):
         a = 'id: {id}, iter: {iter}, '.format(id=self.id, iter=self.l)
@@ -47,6 +49,15 @@ class Info_sense:
             b = track.__str__()+'\n'
             a += b
         return a
+
+class Occlusion:
+
+    def __init__(self) -> None:
+        # float64
+        self.pos = [0.0, 0]
+        
+        # str
+        self.shape = None
 
 class Agent_basic:
     def __init__(self):
