@@ -42,11 +42,6 @@ isParallel=True, IsDistriOpt=False,
 isParallel=True, IsDistriOpt=True, 
 ```
 
-need to write this out
-
-ok, this is from dev repo
-
-merge from dev repo's dev-branch
 
 
 ### 2. Visualization
