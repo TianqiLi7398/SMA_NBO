@@ -299,7 +299,7 @@ class simulator:
             
 
             # 2. consensus starts
-            for l in range(N):
+            for _ in range(N):
                 # receive all infos
                 for agent in agent_list:
                     agent.grab_info_list(info_list)
@@ -480,7 +480,7 @@ class simulator:
             
 
             # 2. consensus starts
-            for l in range(N):
+            for _ in range(N):
                 # receive all infos
                 for agent in agent_list:
                     agent.grab_info_list(info_list)
@@ -514,9 +514,10 @@ class simulator:
                 # centralized planning by a leader
                 u = [[0,0]] * len(agent_list)
                 u = agent_list[leader].planning(u)
-                for ag_nb in range(len(agent_list)):
-                    agent = agent_list[ag_nb]
-                    agent.v = u[ag_nb]
+
+                for agent, action in zip(agent_list, u):
+                    
+                    agent.v = copy.deepcopy(action)
                     
                 rollout_policy.append(u)
             # update position given policy u
@@ -895,7 +896,7 @@ class simulator:
             obs_set.append(obs_k)
             
             # 2. consensus starts
-            for l in range(N):
+            for _ in range(N):
                 # receive all infos
                 for agent in agent_list:
                     agent.grab_info_list(info_list)
@@ -930,10 +931,10 @@ class simulator:
                 
                 u = agent_list[0].planning()
                 # broadcast this final u to all agents
-                for i in range(len(agent_list)):
-                    action = u[i][0]
-                    agent = agent_list[i]
-                    agent.v = copy.deepcopy(action)
+                for agent, action_horizon in zip(agent_list, u):
+                    
+                    agent.v = copy.deepcopy(action_horizon[0])
+                
 
                 # record all actions to generate the plan in near future
                 rollout_policy.append(copy.deepcopy(u))
@@ -1106,7 +1107,7 @@ class simulator:
             
 
             # 2. consensus starts
-            for l in range(N):
+            for _ in range(N):
                 # receive all infos
                 for agent in agent_list:
                     agent.grab_info_list(info_list)
@@ -1325,7 +1326,7 @@ class simulator:
             
 
             # 2. consensus starts
-            for l in range(N):
+            for _ in range(N):
                 # receive all infos
                 for agent in agent_list:
                     agent.grab_info_list(info_list)
@@ -1560,7 +1561,7 @@ class simulator:
                 # decision making step
                 
                 u = agent_list[0].planning()
-                print(u)
+                
                 # broadcast this final u to all agents
                 for agent, action_horizon in zip(agent_list, u):
                     
