@@ -4,7 +4,7 @@ To successfully run a multi-target multi-sensor target tracking simulation, we n
 
 ## Sensor Parameters
 
-One good example is file `parkingSensorPara.json`.
+One good example is file [`parkingSensorPara.json`](https://github.com/TianqiLi7398/SMA_NBO/blob/main/data/env/parkingSensorPara.json).
 Sensors parameter is contained in subdict `sensors`
 
 ```
@@ -25,14 +25,14 @@ Sensors parameter is contained in subdict `sensors`
 ## Trajectory Generation
 
 You can use [`createTraj.py`](https://github.com/TianqiLi7398/SMA_NBO/blob/main/createTraj.py) to generate trajectories of the targets. 
-The example traj used is `ParkingTraj2.json` in our simulations.
+The example traj used is [`ParkingTraj2.json`](https://github.com/TianqiLi7398/SMA_NBO/blob/main/data/env/ParkingTraj2.json) in our simulations.
 
 A pic of what trajectory looks like.
 
 ## Occlusion Map Generation
 
 You can use [`poisson_map.py`](https://github.com/TianqiLi7398/SMA_NBO/blob/main/poisson_map.py) to generate your own map. 
-One example file for map generation is in folder `/poisson`, which contains random generated occlusion maps with parameter of circular occlusion $(\lambda, R)$.
+One example file for map generation is in folder [`data/env/poisson`](https://github.com/TianqiLi7398/SMA_NBO/tree/main/data/env/poisson), which contains random generated occlusion maps with parameter of circular occlusion $(\lambda, R)$.
 
 
 - $\lambda$: density of the occlusion, # of uncertainty per $m^2$
