@@ -63,7 +63,9 @@ Once simulation is completed, a `.json` file will be generated as the record. Th
 
 ### 3. Evaluation
 
+`--task=freq_analysis`
 
+Plot the CDF of OSPA metrics ([Bread et. al, 2017](https://ieeexplore.ieee.org/document/8217598)) in MTT
 
 ## Multiagent-Target-Planning
 
