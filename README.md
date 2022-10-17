@@ -56,6 +56,8 @@ Our simulation contains the following cases
 
 ### 2. Simulation Visualization
 
+`--task=visualize`
+
 Once simulation is completed, a `.json` file will be generated as the record. The simulation can be visualized based on this record as the MTT scenario above.
 
 
