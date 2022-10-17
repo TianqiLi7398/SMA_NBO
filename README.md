@@ -65,10 +65,8 @@ Once simulation is completed, a `.json` file will be generated as the record. Th
 
 `--task=freq_analysis`
 
-Plot the CDF of OSPA metrics ([Bread et. al, 2017](https://ieeexplore.ieee.org/document/8217598)) in MTT
+Plot the CDF of OSPA metrics ([Beard et. al, 2017](https://ieeexplore.ieee.org/document/8217598)) in MTT over all time steps in simulations configed by `--r-list, --horizon-list, --deci-Schema-list, --horizon-list, --repeated-times, --iteration`.
 
-## Multiagent-Target-Planning
+`--task=time_series_ospa`
 
-To run this package, please use python3 version
-
-`$ python3 main.py` 
+Plot the mean and variance of OSPA metrics in MTT at every time steps in simulations configed by `--r-list, --horizon-list, --deci-Schema-list, --horizon-list, --repeated-times, --iteration`.
