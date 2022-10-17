@@ -24,14 +24,14 @@ Sensors parameter is contained in subdict `sensors`
 
 ## Trajectory Generation
 
-You can use `createTraj.py` to generate trajectories of the targets. 
+You can use [`createTraj.py`](https://github.com/TianqiLi7398/SMA_NBO/blob/main/createTraj.py) to generate trajectories of the targets. 
 The example traj used is `ParkingTraj2.json` in our simulations.
 
 A pic of what trajectory looks like.
 
 ## Occlusion Map Generation
 
-You can use `poisson_map.py` to generate your own map. 
+You can use [`poisson_map.py`](https://github.com/TianqiLi7398/SMA_NBO/blob/main/poisson_map.py) to generate your own map. 
 One example file for map generation is in folder `/poisson`, which contains random generated occlusion maps with parameter of circular occlusion $(\lambda, R)$.
 
 
