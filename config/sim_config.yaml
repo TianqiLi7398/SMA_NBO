@@ -1,0 +1,27 @@
+---
+  task: "run"  
+  repeated: 0     # trial num, make it 0 as default unless run repeated sim over same map
+  iteration: 0    # map iteration, only used for randomized possion occlusion maps
+  agent_num: 1    # number of agents, change it to what you need
+  target_num: 4   # number of targets,
+  traj_type: "normal" # the 4 target MTT sim in SMA-NBO paper
+  coverfile: false # if the new sim record will cover the old one, pay attention to this
+  # map config
+  case: "poisson"  # random occlusions based on lambda0 and r (size of circles)
+  lambda0: 0.003
+  r: 5
+  # planning algorithm config
+  horizon: 5
+  deci_Schema: "sma"
+  domain: "nbo"
+  ckf: true
+  wtp: true
+  info_gain: "trace_sum"
+  useSemantic: true
+  # optimization config
+  optmethod: "pso" # mcts or MonteCarloRollout
+  # MonteCarloRollout config
+  MCSnum: 50
+  # pso config
+  ftol: 0.0005
+  gtol: 75
